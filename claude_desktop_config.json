@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "php-sparql-mcp": {
+      "command": "php",
+      "args": ["/Users/rpage/Development/php-mcp-server/mcp_sparql_server.php"],
+      "env": {
+        "SPARQL_ENDPOINT": "http://localhost:7878/query?union-default-graph"
+      }
+    }
+  }
+}
