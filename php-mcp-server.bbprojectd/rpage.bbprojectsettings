@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>EmbeddedEditorHidden:rpage</key>
+	<false/>
+	<key>ExpandedEditorWidth:rpage:displays([(0, 0), (3440, 1440)])</key>
+	<integer>657</integer>
+	<key>ExpandedItems:rpage</key>
+	<array>
+		<string>7B009ED8-DD23-4245-8799-5CF021CC55AF</string>
+	</array>
+	<key>FileFilterMode:rpage</key>
+	<integer>0</integer>
+	<key>OpenDocuments:rpage</key>
+	<array/>
+	<key>OpenDocumentsExpanded</key>
+	<true/>
+	<key>OpenDocumentsSplitterProportion</key>
+	<real>0.85488372093023257</real>
+	<key>ProjectItemsExpanded</key>
+	<true/>
+	<key>ProjectViewVisible</key>
+	<true/>
+	<key>RecentItems:rpage</key>
+	<array/>
+	<key>ScratchpadItemsExpanded</key>
+	<true/>
+	<key>ScratchpadItemsVisible</key>
+	<true/>
+	<key>ShowSCMData:rpage</key>
+	<false/>
+	<key>ToolbarVisible:rpage</key>
+	<false/>
+	<key>ViewSplitterPosition:rpage</key>
+	<real>0.23604650795459747</real>
+	<key>WindowFrame:rpage:displays([(0, 0), (3440, 1440)])</key>
+	<string>rect(169,1579,1244,2439)</string>
+</dict>
+</plist>

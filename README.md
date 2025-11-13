@@ -1,2 +1,3 @@
-# php-mcp-server
+# PHP Model Context Protocol (MCP) server
+
 Experiments with a Model Context Protocol (MCP) server in PHP
