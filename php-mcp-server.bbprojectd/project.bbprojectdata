@@ -8,6 +8,7 @@
 		<string>071BE17C-4661-4859-AEE2-1426B5BC50E5</string>
 		<string>8B1DF13C-4657-4785-8245-C8A2616A3343</string>
 		<string>1366EAF3-2152-488D-9BD8-CACFC6884159</string>
+		<string>40105267-248D-437E-A5E6-C79C70AF516A</string>
 		<string>B54CA010-FFDD-4C0B-BC77-45AE23822113</string>
 	</array>
 	<key>ProjectItems</key>
@@ -104,6 +105,56 @@
 			<string>mcp_sparql_server.php</string>
 			<key>ItemType</key>
 			<string>FileReference</string>
+		</dict>
+		<key>40105267-248D-437E-A5E6-C79C70AF516A</key>
+		<dict>
+			<key>ItemData</key>
+			<dict>
+				<key>BookmarkData</key>
+				<data>
+				Ym9vazADAAAAAAQQMAAAAJc3cMnsMC1R4bUmiP7LzE4R
+				GKu+hUnIdzp+cG0pGUKhIAIAAAQAAAADAwAAAAgAKAUA
+				AAABAQAAVXNlcnMAAAAFAAAAAQEAAHJwYWdlAAAACwAA
+				AAEBAABEZXZlbG9wbWVudAAOAAAAAQEAAHBocC1tY3At
+				c2VydmVyAAATAAAAAQEAAG1jcF90ZXN0X2NsaWVudC5w
+				aHAAFAAAAAEGAAAQAAAAIAAAADAAAABEAAAAXAAAAAgA
+				AAAEAwAAhFwAAAAAAAAIAAAABAMAAJbGAwAAAAAACAAA
+				AAQDAABZKSUAAAAAAAgAAAAEAwAA97kN3AAAAAAIAAAA
+				BAMAAKcIhfMAAAAAFAAAAAEGAACUAAAApAAAALQAAADE
+				AAAA1AAAAAgAAAAABAAAQcdi+F9JAlkYAAAAAQIAAAEA
+				AAAAAAAADwAAAAAAAAAAAAAAAAAAAAgAAAAEAwAAAwAA
+				AAAAAAAEAAAAAwMAAPUBAAAIAAAAAQkAAGZpbGU6Ly8v
+				DAAAAAEBAABNYWNpbnRvc2ggSEQIAAAABAMAAACQgpbn
+				AAAACAAAAAAEAABBxnee2oAAACQAAAABAQAARUVEQkM0
+				OTUtREY1Mi00NTZBLUI0MzEtRkI2MDdCRjA0QUQxGAAA
+				AAECAACBAAAAAQAAAO8TAAABAAAAAAAAAAAAAAABAAAA
+				AQEAAC8AAAAAAAAAAQUAABoAAAABAQAATlNVUkxEb2N1
+				bWVudElkZW50aWZpZXJLZXkAAAQAAAADAwAAzUM0ANgA
+				AAD+////AQAAAAAAAAARAAAABBAAAHgAAAAAAAAABRAA
+				AOQAAAAAAAAAEBAAABABAAAAAAAAQBAAAAABAAAAAAAA
+				AiAAANwBAAAAAAAABSAAAEwBAAAAAAAAECAAAFwBAAAA
+				AAAAESAAAJABAAAAAAAAEiAAAHABAAAAAAAAEyAAAIAB
+				AAAAAAAAICAAALwBAAAAAAAAMCAAAOgBAAAAAAAAAcAA
+				ADABAAAAAAAAEcAAACAAAAAAAAAAEsAAAEABAAAAAAAA
+				ENAAAAQAAAAAAAAA8AEAgBQCAAAAAAAA
+				</data>
+				<key>FileURL</key>
+				<string>file:///Users/rpage/Development/php-mcp-server/mcp_test_client.php</string>
+				<key>HasSecurityScope</key>
+				<true/>
+				<key>RelativePath</key>
+				<string>./mcp_test_client.php</string>
+				<key>TypeID</key>
+				<string>_CFileLocator</string>
+				<key>Version</key>
+				<integer>1</integer>
+			</dict>
+			<key>ItemName</key>
+			<string>mcp_test_client.php</string>
+			<key>ItemType</key>
+			<string>FileReference</string>
+			<key>UserOverrideItemName</key>
+			<true/>
 		</dict>
 		<key>8B1DF13C-4657-4785-8245-C8A2616A3343</key>
 		<dict>

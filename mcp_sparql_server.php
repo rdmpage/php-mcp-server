@@ -34,8 +34,7 @@ function get_sparql_endpoint()
 }
 
 // ---- MCP FRAMING (Content-Length over stdio) --------------------------
-
-if (0)
+if (0) // 0  works with Claude
 {
 	function readMessage()
 	{
@@ -425,73 +424,81 @@ function handleRequest(array $request)
 			}
 
             $args     = isset($params['arguments']) ? $params['arguments'] : [];
-
-            if ($toolName === 'sparqlQuery') {
-                $query = isset($args['query']) ? $args['query'] : '';
-                if (trim($query) === '') {
-                    $response['error'] = [
-                        'code'    => -32602,
-                        'message' => 'Missing or empty "query" argument for sparqlQuery.',
-                    ];
-                    break;
-                }
-
-                $jsonPreferred = true;
-                if (isset($args['jsonPreferred'])) {
-                    $jsonPreferred = (bool)$args['jsonPreferred'];
-                }
-
-                $endpoint = get_sparql_endpoint();
-                $result   = run_sparql_query($endpoint, $query, $jsonPreferred);
-                $text     = format_sparql_result_as_text($result);
-
-                $response['result'] = [
-                    'toolName' => 'sparqlQuery',
-                    'content'  => [
-                        [
-                            'type' => 'text',
-                            'text' => $text,
-                        ],
-                    ],
-                    'meta' => [
-                        'endpoint' => $endpoint,
-                        'status'   => $result['ok'] ? $result['status'] : null,
-                    ],
-                ];
-            } elseif ($toolName === 'authorsByDoi') {
-                $doi = isset($args['doi']) ? $args['doi'] : '';
-                if (trim($doi) === '') {
-                    $response['error'] = [
-                        'code'    => -32602,
-                        'message' => 'Missing or empty \"doi\" argument for authorsByDoi.',
-                    ];
-                    break;
-                }
-
-                $endpoint = get_sparql_endpoint();
-                $query    = build_authors_by_doi_query($doi);
-                $result   = run_sparql_query($endpoint, $query, true);
-                $text     = format_authors_result_as_text($result);
-
-                $response['result'] = [
-                    'toolName' => 'authorsByDoi',
-                    'content'  => [
-                        [
-                            'type' => 'text',
-                            'text' => $text,
-                        ],
-                    ],
-                    'meta' => [
-                        'endpoint' => $endpoint,
-                        'status'   => $result['ok'] ? $result['status'] : null,
-                        'doi'      => $doi,
-                    ],
-                ];
-            } else {
-                $response['error'] = [
-                    'code'    => -32601,
-                    'message' => 'Unknown tool: ' . $toolName,
-                ];
+            
+            // Map toolName to query
+            switch ($toolName)
+            {
+				case 'sparqlQuery':
+					$query = isset($args['query']) ? $args['query'] : '';
+					if (trim($query) === '') {
+						$response['error'] = [
+							'code'    => -32602,
+							'message' => 'Missing or empty "query" argument for sparqlQuery.',
+						];
+						break;
+					}
+	
+					$jsonPreferred = true;
+					if (isset($args['jsonPreferred'])) {
+						$jsonPreferred = (bool)$args['jsonPreferred'];
+					}
+	
+					$endpoint = get_sparql_endpoint();
+					$result   = run_sparql_query($endpoint, $query, $jsonPreferred);
+					$text     = format_sparql_result_as_text($result);
+	
+					$response['result'] = [
+						'toolName' => 'sparqlQuery',
+						'content'  => [
+							[
+								'type' => 'text',
+								'text' => $text,
+							],
+						],
+						'meta' => [
+							'endpoint' => $endpoint,
+							'status'   => $result['ok'] ? $result['status'] : null,
+						],
+					];
+					break;
+					
+				case 'authorsByDoi':
+					$doi = isset($args['doi']) ? $args['doi'] : '';
+					if (trim($doi) === '') {
+						$response['error'] = [
+							'code'    => -32602,
+							'message' => 'Missing or empty \"doi\" argument for authorsByDoi.',
+						];
+						break;
+					}
+	
+					$endpoint = get_sparql_endpoint();
+					$query    = build_authors_by_doi_query($doi);
+					$result   = run_sparql_query($endpoint, $query, true);
+					$text     = format_authors_result_as_text($result);
+	
+					$response['result'] = [
+						'toolName' => 'authorsByDoi',
+						'content'  => [
+							[
+								'type' => 'text',
+								'text' => $text,
+							],
+						],
+						'meta' => [
+							'endpoint' => $endpoint,
+							'status'   => $result['ok'] ? $result['status'] : null,
+							'doi'      => $doi,
+						],
+					];
+					break;
+					
+				default:
+					$response['error'] = [
+						'code'    => -32601,
+						'message' => 'Unknown tool: ' . $toolName,
+					];
+					break;
             }
             break;
 
@@ -524,6 +531,15 @@ while (!feof(STDIN)) {
         // Invalid / partial message; keep listening
         continue;
     }
+    
+    // Need to do this otherwise Calude complains at startup
+    // Notifications have no "id" → don't send a response
+    if (!isset($request['id'])) {
+        $method = isset($request['method']) ? $request['method'] : '(no method)';
+        fwrite(STDERR, "[php-sparql-mcp] Received notification: $method\n");
+        // Optionally handle notifications here if you want.
+        continue;
+    }    
 
     $response = handleRequest($request);
     sendMessage($response);
