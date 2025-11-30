@@ -34,156 +34,116 @@ function get_sparql_endpoint()
 }
 
 // ---- MCP FRAMING (Content-Length over stdio) --------------------------
-if (0) // 0  works with Claude
+
+// Track which protocol mode is being used
+$GLOBALS['use_headers'] = false;
+
+function readMessage()
 {
-	function readMessage()
-	{
-		// Read first non-empty line
-		while (true) {
-			$line = fgets(STDIN);
-			if ($line === false) {
-				fwrite(STDERR, "[php-sparql-mcp] EOF or error reading first line\n");
-				return null;
-			}
-	
-			$lineTrimmed = rtrim($line, "\r\n");
-	
-			if ($lineTrimmed === '') {
-				// skip stray blank lines
-				continue;
-			}
-	
-			// Case 1: line-delimited JSON (no headers)
-			$firstChar = ltrim($lineTrimmed);
-			if ($firstChar !== '' && ($firstChar[0] === '{' || $firstChar[0] === '[')) {
-				// We assume this is the whole JSON message (Claude sends it on one line)
-				$body = $lineTrimmed;
-				fwrite(STDERR, "[php-sparql-mcp] Received JSON line (no headers): $body\n");
-	
-				$data = json_decode($body, true);
-				if (json_last_error() !== JSON_ERROR_NONE) {
-					fwrite(STDERR, "[php-sparql-mcp] JSON decode error (no-headers mode): " . json_last_error_msg() . "\n");
-					return null;
-				}
-				return $data;
-			}
-	
-			// Case 2: header-based framing (Content-Length etc.)
-			// We fall through and treat this line as the first header
-			$headers = [];
-			$headersLine = $lineTrimmed;
-	
-			while (true) {
-				if ($headersLine === '') {
-					// end of headers
-					break;
-				}
-	
-				$parts = explode(':', $headersLine, 2);
-				if (count($parts) === 2) {
-					$headers[strtolower(trim($parts[0]))] = trim($parts[1]);
-				}
-	
-				$next = fgets(STDIN);
-				if ($next === false) {
-					fwrite(STDERR, "[php-sparql-mcp] EOF or error reading subsequent header line\n");
-					return null;
-				}
-				$headersLine = rtrim($next, "\r\n");
-				if ($headersLine === '') {
-					// blank line → end of headers
-					break;
-				}
-			}
-	
-			if (!isset($headers['content-length'])) {
-				fwrite(STDERR, "[php-sparql-mcp] Missing Content-Length header in header-based mode\n");
-				return null;
-			}
-	
-			$length = (int)$headers['content-length'];
-			if ($length <= 0) {
-				fwrite(STDERR, "[php-sparql-mcp] Invalid Content-Length: $length\n");
-				return null;
-			}
-	
-			$body = '';
-			$remaining = $length;
-	
-			while ($remaining > 0) {
-				$chunk = fread(STDIN, $remaining);
-				if ($chunk === false || $chunk === '') {
-					fwrite(STDERR, "[php-sparql-mcp] Error or EOF while reading body in header-based mode\n");
-					return null;
-				}
-				$body      .= $chunk;
-				$remaining -= strlen($chunk);
-			}
-	
-			fwrite(STDERR, "[php-sparql-mcp] Received raw body (header-based): $body\n");
-	
-			$data = json_decode($body, true);
-			if (json_last_error() !== JSON_ERROR_NONE) {
-				fwrite(STDERR, "[php-sparql-mcp] JSON decode error (header-based mode): " . json_last_error_msg() . "\n");
-				return null;
-			}
-	
-			return $data;
+	// Auto-detect protocol: headers (Content-Length) or line-delimited JSON
+	while (true) {
+		$line = fgets(STDIN);
+		if ($line === false) {
+			fwrite(STDERR, "[php-sparql-mcp] EOF or error reading line\n");
+			return null;
 		}
-	}
-	
-	function sendMessage(array $msg)
-	{
-		$json   = json_encode($msg, JSON_UNESCAPED_SLASHES);
-		$length = strlen($json);
-	
-		$headers  = "Content-Length: {$length}\r\n\r\n";
-	
-		fwrite(STDOUT, $headers . $json);
-		fflush(STDOUT);
-	
-		fwrite(STDERR, "[php-sparql-mcp] Sent response: $json\n");
-	}
-	
-}
-else
-{
-	
-	function readMessage()
-	{
-		while (true) {
-			$line = fgets(STDIN);
-			if ($line === false) {
-				fwrite(STDERR, "[php-sparql-mcp] EOF or error reading line\n");
-				return null;
-			}
-	
-			$line = trim($line);
-			if ($line === '') {
-				// skip empty lines
-				continue;
-			}
-	
-			fwrite(STDERR, "[php-sparql-mcp] Received line: $line\n");
-	
-			$data = json_decode($line, true);
+
+		$lineTrimmed = rtrim($line, "\r\n");
+
+		if ($lineTrimmed === '') {
+			// skip stray blank lines
+			continue;
+		}
+
+		// Case 1: line-delimited JSON (no headers) - used by Claude
+		$firstChar = ltrim($lineTrimmed);
+		if ($firstChar !== '' && ($firstChar[0] === '{' || $firstChar[0] === '[')) {
+			$GLOBALS['use_headers'] = false;
+			fwrite(STDERR, "[php-sparql-mcp] Received JSON line (no headers): $lineTrimmed\n");
+
+			$data = json_decode($lineTrimmed, true);
 			if (json_last_error() !== JSON_ERROR_NONE) {
 				fwrite(STDERR, "[php-sparql-mcp] JSON decode error: " . json_last_error_msg() . "\n");
 				return null;
 			}
-	
 			return $data;
 		}
-	}
 
-	function sendMessage(array $msg)
-	{
-		$json = json_encode($msg, JSON_UNESCAPED_SLASHES);
+		// Case 2: header-based framing (Content-Length) - used by test client
+		$GLOBALS['use_headers'] = true;
+		$headers = [];
+		$headersLine = $lineTrimmed;
+
+		while (true) {
+			if ($headersLine === '') {
+				break;
+			}
+
+			$parts = explode(':', $headersLine, 2);
+			if (count($parts) === 2) {
+				$headers[strtolower(trim($parts[0]))] = trim($parts[1]);
+			}
+
+			$next = fgets(STDIN);
+			if ($next === false) {
+				fwrite(STDERR, "[php-sparql-mcp] EOF or error reading header\n");
+				return null;
+			}
+			$headersLine = rtrim($next, "\r\n");
+		}
+
+		if (!isset($headers['content-length'])) {
+			fwrite(STDERR, "[php-sparql-mcp] Missing Content-Length header\n");
+			return null;
+		}
+
+		$length = (int)$headers['content-length'];
+		if ($length <= 0) {
+			fwrite(STDERR, "[php-sparql-mcp] Invalid Content-Length: $length\n");
+			return null;
+		}
+
+		$body = '';
+		$remaining = $length;
+
+		while ($remaining > 0) {
+			$chunk = fread(STDIN, $remaining);
+			if ($chunk === false || $chunk === '') {
+				fwrite(STDERR, "[php-sparql-mcp] Error or EOF while reading body\n");
+				return null;
+			}
+			$body      .= $chunk;
+			$remaining -= strlen($chunk);
+		}
+
+		fwrite(STDERR, "[php-sparql-mcp] Received body (with headers): $body\n");
+
+		$data = json_decode($body, true);
+		if (json_last_error() !== JSON_ERROR_NONE) {
+			fwrite(STDERR, "[php-sparql-mcp] JSON decode error: " . json_last_error_msg() . "\n");
+			return null;
+		}
+
+		return $data;
+	}
+}
+
+function sendMessage(array $msg)
+{
+	$json = json_encode($msg, JSON_UNESCAPED_SLASHES);
+
+	if ($GLOBALS['use_headers']) {
+		// Send with Content-Length headers (for test client)
+		$length = strlen($json);
+		fwrite(STDOUT, "Content-Length: {$length}\r\n\r\n{$json}");
+		fwrite(STDERR, "[php-sparql-mcp] Sent with headers: $json\n");
+	} else {
+		// Send as line-delimited JSON (for Claude)
 		fwrite(STDOUT, $json . "\n");
-		fflush(STDOUT);
-	
 		fwrite(STDERR, "[php-sparql-mcp] Sent line: $json\n");
 	}
+
+	fflush(STDOUT);
 }
 
 // ---- SPARQL WRAPPER ---------------------------------------------------
