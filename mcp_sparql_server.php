@@ -423,18 +423,9 @@ function handleRequest(array $request)
 
 		//--------------------------------------------------------------------------------
         case 'tools/call':
-			// Claude sends { "name": "sparqlQuery", "arguments": { ... } }
-			// Our older code might expect "toolName", so support both.
-			$toolName = null;
-			if (isset($params['toolName'])) {
-				$toolName = $params['toolName'];
-			} elseif (isset($params['name'])) {
-				$toolName = $params['name'];
-			}
+			$toolName = $params['name'] ?? null;
+            $args     = $params['arguments'] ?? [];
 
-            $args     = isset($params['arguments']) ? $params['arguments'] : [];
-            
-            // Map toolName to query
             switch ($toolName)
             {
             	// Generic SPARQL query
