@@ -238,6 +238,7 @@ function run_sparql_query($endpoint, $query, $acceptJson = true)
     ];
 }
 
+//----------------------------------------------------------------------------------------
 function format_sparql_result_as_text(array $result)
 {
     if (!$result['ok']) {
@@ -254,6 +255,7 @@ function format_sparql_result_as_text(array $result)
     return $body;
 }
 
+//----------------------------------------------------------------------------------------
 // Optional: higher-level DOI helper (only if you’re using the authorsByDoi pattern)
 // (You can comment this out if not using it)
 function build_authors_by_doi_query($doi)
@@ -279,6 +281,7 @@ SPARQL;
     return $query;
 }
 
+//----------------------------------------------------------------------------------------
 function format_authors_result_as_text(array $result)
 {
     if (!$result['ok']) {
@@ -333,6 +336,8 @@ function handleRequest(array $request)
     ];
 
     switch ($method) {
+    
+		//--------------------------------------------------------------------------------
         case 'initialize':
             // Mirror client's protocolVersion if provided
             $clientProtocol = isset($params['protocolVersion'])
@@ -359,6 +364,7 @@ function handleRequest(array $request)
             ];
             break;
             
+		//--------------------------------------------------------------------------------
         case 'resources/list':
             // For now we expose no resources; return an empty list.
             $response['result'] = [
@@ -366,6 +372,7 @@ function handleRequest(array $request)
             ];
             break;    
             
+ 		//--------------------------------------------------------------------------------
         case 'resources/read':
             // We don't actually implement any resources yet.
             $response['error'] = [
@@ -374,6 +381,7 @@ function handleRequest(array $request)
             ];
             break;                    
 
+		//--------------------------------------------------------------------------------
         case 'tools/list':
             $response['result'] = [
                 'tools' => [
@@ -413,6 +421,7 @@ function handleRequest(array $request)
             ];
             break;
 
+		//--------------------------------------------------------------------------------
         case 'tools/call':
 			// Claude sends { "name": "sparqlQuery", "arguments": { ... } }
 			// Our older code might expect "toolName", so support both.
@@ -428,6 +437,7 @@ function handleRequest(array $request)
             // Map toolName to query
             switch ($toolName)
             {
+            	// Generic SPARQL query
 				case 'sparqlQuery':
 					$query = isset($args['query']) ? $args['query'] : '';
 					if (trim($query) === '') {
@@ -502,11 +512,13 @@ function handleRequest(array $request)
             }
             break;
 
+		//--------------------------------------------------------------------------------
         case 'ping':
             $response['result'] = ['ok' => true];
             break;
 
-        default:
+ 		//--------------------------------------------------------------------------------
+       default:
             $response['error'] = [
                 'code'    => -32601,
                 'message' => 'Method not found: ' . $method,
@@ -532,7 +544,7 @@ while (!feof(STDIN)) {
         continue;
     }
     
-    // Need to do this otherwise Calude complains at startup
+    // Need to do this otherwise Claude complains at startup
     // Notifications have no "id" → don't send a response
     if (!isset($request['id'])) {
         $method = isset($request['method']) ? $request['method'] : '(no method)';
