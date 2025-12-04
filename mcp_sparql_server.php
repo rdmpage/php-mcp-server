@@ -348,8 +348,9 @@ function handleRequest(array $request)
         case 'resources/read':
             $uri = $params['uri'] ?? null;
 
-            if ($uri === 'sparql://schema') {
-                $content = <<<TEXT
+            switch ($uri) {
+                case 'sparql://schema':
+                    $content = <<<TEXT
 # Knowledge Graph Schema
 
 This knowledge graph uses schema.org vocabulary (https://schema.org/).
@@ -375,17 +376,19 @@ PREFIX schema: <https://schema.org/>
 
 TEXT;
 
-                $response['result'] = [
-                    'contents' => [
-                        [
-                            'uri'      => 'sparql://schema',
-                            'mimeType' => 'text/plain',
-                            'text'     => $content,
+                    $response['result'] = [
+                        'contents' => [
+                            [
+                                'uri'      => 'sparql://schema',
+                                'mimeType' => 'text/plain',
+                                'text'     => $content,
+                            ],
                         ],
-                    ],
-                ];
-            } elseif ($uri === 'sparql://examples') {
-                $content = <<<TEXT
+                    ];
+                    break;
+
+                case 'sparql://examples':
+                    $content = <<<TEXT
 # Example SPARQL Queries
 
 ## Find all properties of an article by DOI
@@ -416,20 +419,23 @@ SELECT ?articleName WHERE {
 
 TEXT;
 
-                $response['result'] = [
-                    'contents' => [
-                        [
-                            'uri'      => 'sparql://examples',
-                            'mimeType' => 'text/plain',
-                            'text'     => $content,
+                    $response['result'] = [
+                        'contents' => [
+                            [
+                                'uri'      => 'sparql://examples',
+                                'mimeType' => 'text/plain',
+                                'text'     => $content,
+                            ],
                         ],
-                    ],
-                ];
-            } else {
-                $response['error'] = [
-                    'code'    => -32002,
-                    'message' => 'Unknown resource URI: ' . $uri,
-                ];
+                    ];
+                    break;
+
+                default:
+                    $response['error'] = [
+                        'code'    => -32002,
+                        'message' => 'Unknown resource URI: ' . $uri,
+                    ];
+                    break;
             }
             break;                    
 
