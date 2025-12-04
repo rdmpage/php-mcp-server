@@ -220,24 +220,32 @@ function format_sparql_result_as_text(array $result)
 function build_authors_of_work_query($uri)
 {
     $query = <<<SPARQL
-PREFIX schema: <https://schema.org/>
+PREFIX schema: <http://schema.org/>
 
-SELECT DISTINCT ?authorName WHERE {
-  <$uri> schema:creator ?author .
+SELECT
+  ?author
+  (COALESCE(
+     ?nameStr,
+     CONCAT(?givenStr, " ", ?familyStr),
+     ?givenStr,
+     ?familyStr
+   ) AS ?authorName)
+WHERE {
+  SELECT
+    ?author
+    (SAMPLE(?name)       AS ?nameStr)
+    (SAMPLE(?givenName)  AS ?givenStr)
+    (SAMPLE(?familyName) AS ?familyStr)
+  WHERE {
+    <$uri> schema:creator ?author .
+    ?author a schema:Person .
 
-  ?author a schema:Person .
-
-  {
-    ?author schema:name ?authorName .
+    OPTIONAL { ?author schema:name       ?name . }
+    OPTIONAL { ?author schema:givenName  ?givenName . }
+    OPTIONAL { ?author schema:familyName ?familyName . }
   }
-  UNION
-  {
-    ?author schema:givenName ?givenName ;
-            schema:familyName ?familyName .
-    BIND(CONCAT(?givenName, " ", ?familyName) AS ?authorName)
-  }
+  GROUP BY ?author
 }
-ORDER BY ?authorName
 SPARQL;
 
     return $query;
@@ -355,7 +363,7 @@ function handleRequest(array $request)
                     $content = <<<TEXT
 # Knowledge Graph Schema
 
-This knowledge graph uses schema.org vocabulary (https://schema.org/).
+This knowledge graph uses schema.org vocabulary (http://schema.org/).
 
 ## URI Structure
 
@@ -379,7 +387,7 @@ This knowledge graph uses schema.org vocabulary (https://schema.org/).
 
 ## Common Prefixes
 
-PREFIX schema: <https://schema.org/>
+PREFIX schema: <http://schema.org/>
 
 TEXT;
 
@@ -398,6 +406,8 @@ TEXT;
                     $content = <<<TEXT
 # Example SPARQL Queries
 
+PREFIX schema: <http://schema.org/>
+
 ## Find all properties of a work by URI
 
 SELECT ?property ?value WHERE {
@@ -406,19 +416,28 @@ SELECT ?property ?value WHERE {
 
 ## List all creators/authors (handling different name formats)
 
-SELECT DISTINCT ?authorName WHERE {
-  ?person a schema:Person .
-  {
-    ?person schema:name ?authorName .
+SELECT
+  ?author
+  (COALESCE(
+     ?nameStr,
+     CONCAT(?givenStr, " ", ?familyStr),
+     ?givenStr,
+     ?familyStr
+   ) AS ?authorName)
+WHERE {
+  SELECT
+    ?author
+    (SAMPLE(?name)       AS ?nameStr)
+    (SAMPLE(?givenName)  AS ?givenStr)
+    (SAMPLE(?familyName) AS ?familyStr)
+  WHERE {
+    ?author a schema:Person .
+    OPTIONAL { ?author schema:name       ?name . }
+    OPTIONAL { ?author schema:givenName  ?givenName . }
+    OPTIONAL { ?author schema:familyName ?familyName . }
   }
-  UNION
-  {
-    ?person schema:givenName ?givenName ;
-            schema:familyName ?familyName .
-    BIND(CONCAT(?givenName, " ", ?familyName) AS ?authorName)
-  }
+  GROUP BY ?author
 }
-ORDER BY ?authorName
 
 ## Find works by a specific creator
 
@@ -430,21 +449,29 @@ SELECT ?work ?workName WHERE {
 
 ## Find creators of a work by URI
 
-SELECT DISTINCT ?authorName WHERE {
-  <https://doi.org/10.1234/example> schema:creator ?author .
-
-  ?author a schema:Person .
-  {
-    ?author schema:name ?authorName .
+SELECT
+  ?author
+  (COALESCE(
+     ?nameStr,
+     CONCAT(?givenStr, " ", ?familyStr),
+     ?givenStr,
+     ?familyStr
+   ) AS ?authorName)
+WHERE {
+  SELECT
+    ?author
+    (SAMPLE(?name)       AS ?nameStr)
+    (SAMPLE(?givenName)  AS ?givenStr)
+    (SAMPLE(?familyName) AS ?familyStr)
+  WHERE {
+    <https://doi.org/10.1234/example> schema:creator ?author .
+    ?author a schema:Person .
+    OPTIONAL { ?author schema:name       ?name . }
+    OPTIONAL { ?author schema:givenName  ?givenName . }
+    OPTIONAL { ?author schema:familyName ?familyName . }
   }
-  UNION
-  {
-    ?author schema:givenName ?givenName ;
-            schema:familyName ?familyName .
-    BIND(CONCAT(?givenName, " ", ?familyName) AS ?authorName)
-  }
+  GROUP BY ?author
 }
-ORDER BY ?authorName
 
 TEXT;
 
