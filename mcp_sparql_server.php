@@ -219,14 +219,11 @@ function format_sparql_result_as_text(array $result)
 // Get authors of a work by its URI (DOI, URL, etc.)
 function build_authors_of_work_query($uri)
 {
-    $uriLiteral = str_replace('"', '\"', $uri);
-
     $query = <<<SPARQL
 PREFIX schema: <https://schema.org/>
 
 SELECT DISTINCT ?authorName WHERE {
-  ?work schema:identifier ?identifier ;
-        schema:creator ?author .
+  <$uri> schema:creator ?author .
 
   ?author a schema:Person .
 
@@ -239,8 +236,6 @@ SELECT DISTINCT ?authorName WHERE {
             schema:familyName ?familyName .
     BIND(CONCAT(?givenName, " ", ?familyName) AS ?authorName)
   }
-
-  FILTER( LCASE(STR(?identifier)) = LCASE("$uriLiteral") )
 }
 ORDER BY ?authorName
 SPARQL;
@@ -362,11 +357,15 @@ function handleRequest(array $request)
 
 This knowledge graph uses schema.org vocabulary (https://schema.org/).
 
+## URI Structure
+
+- Works are identified by their URI (e.g., https://doi.org/10.1234/foo.bar)
+- DOIs use the format: https://doi.org/[DOI]
+
 ## Main Entity Types
 
 - **Works** (various types like schema:ScholarlyArticle, schema:Book, etc.)
   - Properties:
-    - schema:identifier - DOI, URL, or other identifier
     - schema:name - Title of the work
     - schema:creator - Links to Person entities (creators/authors)
     - schema:datePublished - Publication date
@@ -399,12 +398,10 @@ TEXT;
                     $content = <<<TEXT
 # Example SPARQL Queries
 
-## Find all properties of a work by identifier
+## Find all properties of a work by URI
 
 SELECT ?property ?value WHERE {
-  ?work schema:identifier ?identifier ;
-        ?property ?value .
-  FILTER( LCASE(STR(?identifier)) = LCASE("10.1234/example") )
+  <https://doi.org/10.1234/example> ?property ?value .
 }
 
 ## List all creators/authors (handling different name formats)
@@ -425,7 +422,7 @@ ORDER BY ?authorName
 
 ## Find works by a specific creator
 
-SELECT ?workName WHERE {
+SELECT ?work ?workName WHERE {
   ?work schema:name ?workName ;
         schema:creator ?author .
   ?author schema:name "John Doe" .
@@ -434,8 +431,8 @@ SELECT ?workName WHERE {
 ## Find creators of a work by URI
 
 SELECT DISTINCT ?authorName WHERE {
-  ?work schema:identifier ?identifier ;
-        schema:creator ?author .
+  <https://doi.org/10.1234/example> schema:creator ?author .
+
   ?author a schema:Person .
   {
     ?author schema:name ?authorName .
@@ -446,7 +443,6 @@ SELECT DISTINCT ?authorName WHERE {
             schema:familyName ?familyName .
     BIND(CONCAT(?givenName, " ", ?familyName) AS ?authorName)
   }
-  FILTER( LCASE(STR(?identifier)) = LCASE("10.1234/example") )
 }
 ORDER BY ?authorName
 
@@ -496,13 +492,13 @@ TEXT;
                     ],
                     [
                         'name'        => 'authorsOfWork',
-                        'description' => 'Given a work URI (DOI, URL, etc.), find all authors/creators of the work.',
+                        'description' => 'Given a work URI, find all authors/creators of the work.',
                         'inputSchema' => [
                             'type'       => 'object',
                             'properties' => [
                                 'uri' => [
                                     'type'        => 'string',
-                                    'description' => 'URI of the work, e.g. "10.1234/foo.bar" or "https://example.org/work/123".',
+                                    'description' => 'URI of the work, e.g. "https://doi.org/10.1234/foo.bar" or "https://example.org/work/123".',
                                 ],
                             ],
                             'required' => ['uri'],
