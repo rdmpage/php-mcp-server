@@ -290,6 +290,97 @@ function format_authors_result_as_text(array $result)
     return $out;
 }
 
+//----------------------------------------------------------------------------------------
+// Find related works using co-citation analysis
+function build_related_works_query($uri)
+{
+    $query = <<<SPARQL
+PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+PREFIX schema: <http://schema.org/>
+
+SELECT * WHERE
+{
+  {
+    SELECT
+      ?other_work
+      (COUNT(DISTINCT ?citing_work) AS ?c)
+      (SAMPLE(?title) AS ?title)
+    WHERE {
+      VALUES ?work { <$uri> }
+
+      ?citing_work schema:citation ?work .
+      ?citing_work schema:citation ?other_work .
+
+      FILTER (?work != ?other_work)
+
+      OPTIONAL {
+        ?other_work schema:name ?title
+      }
+    }
+    GROUP BY ?other_work
+  }
+  FILTER (?c >= 2)
+}
+ORDER BY DESC(?c)
+LIMIT 10
+SPARQL;
+
+    return $query;
+}
+
+//----------------------------------------------------------------------------------------
+function format_related_works_result_as_text(array $result)
+{
+    if (!$result['ok']) {
+        return 'SPARQL error (HTTP ' . $result['status'] . '): ' . $result['error'];
+    }
+
+    $body = $result['body'];
+    $data = json_decode($body, true);
+
+    if (json_last_error() !== JSON_ERROR_NONE || !is_array($data)) {
+        return $body;
+    }
+
+    if (!isset($data['results']['bindings'])) {
+        return json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+    }
+
+    $bindings = $data['results']['bindings'];
+    $works = [];
+
+    foreach ($bindings as $row) {
+        $work = [];
+        if (isset($row['other_work']['value'])) {
+            $work['uri'] = $row['other_work']['value'];
+        }
+        if (isset($row['c']['value'])) {
+            $work['count'] = $row['c']['value'];
+        }
+        if (isset($row['title']['value'])) {
+            $work['title'] = $row['title']['value'];
+        }
+        if (!empty($work)) {
+            $works[] = $work;
+        }
+    }
+
+    if (empty($works)) {
+        return "No related works found.";
+    }
+
+    $out = "Related works (by co-citation):\n\n";
+    foreach ($works as $work) {
+        $count = $work['count'] ?? '?';
+        $title = $work['title'] ?? 'Untitled';
+        $uri = $work['uri'] ?? '';
+        $out .= "[$count co-citations] $title\n  $uri\n\n";
+    }
+
+    return $out;
+}
+
 // ---- MCP REQUEST HANDLER ----------------------------------------------
 
 function handleRequest(array $request)
@@ -531,6 +622,20 @@ TEXT;
                             'required' => ['uri'],
                         ],
                     ],
+                    [
+                        'name'        => 'relatedWorks',
+                        'description' => 'Find works related to the given work using co-citation analysis.',
+                        'inputSchema' => [
+                            'type'       => 'object',
+                            'properties' => [
+                                'uri' => [
+                                    'type'        => 'string',
+                                    'description' => 'URI of the work, e.g. "https://doi.org/10.1234/foo.bar".',
+                                ],
+                            ],
+                            'required' => ['uri'],
+                        ],
+                    ],
                 ],
             ];
             break;
@@ -607,7 +712,38 @@ TEXT;
 						],
 					];
 					break;
-					
+
+				case 'relatedWorks':
+					$uri = $args['uri'] ?? '';
+					if (trim($uri) === '') {
+						$response['error'] = [
+							'code'    => -32602,
+							'message' => 'Missing or empty "uri" argument for relatedWorks.',
+						];
+						break;
+					}
+
+					$endpoint = get_sparql_endpoint();
+					$query    = build_related_works_query($uri);
+					$result   = run_sparql_query($endpoint, $query, true);
+					$text     = format_related_works_result_as_text($result);
+
+					$response['result'] = [
+						'toolName' => 'relatedWorks',
+						'content'  => [
+							[
+								'type' => 'text',
+								'text' => $text,
+							],
+						],
+						'meta' => [
+							'endpoint' => $endpoint,
+							'status'   => $result['ok'] ? $result['status'] : null,
+							'uri'      => $uri,
+						],
+					];
+					break;
+
 				default:
 					$response['error'] = [
 						'code'    => -32601,
