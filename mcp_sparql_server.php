@@ -316,8 +316,8 @@ function handleRequest(array $request)
                         'call' => true,
                     ],
                     'resources' => [
-                        'list'      => true,   // we implement resources/list
-                        'read'      => false,
+                        'list'      => true,
+                        'read'      => true,
                         'subscribe' => false,
                     ],
                 ],
@@ -326,19 +326,111 @@ function handleRequest(array $request)
             
 		//--------------------------------------------------------------------------------
         case 'resources/list':
-            // For now we expose no resources; return an empty list.
             $response['result'] = [
-                'resources' => [],
+                'resources' => [
+                    [
+                        'uri'         => 'sparql://schema',
+                        'name'        => 'Knowledge Graph Schema',
+                        'description' => 'Description of the schema.org vocabulary used in the knowledge graph',
+                        'mimeType'    => 'text/plain',
+                    ],
+                    [
+                        'uri'         => 'sparql://examples',
+                        'name'        => 'Example SPARQL Queries',
+                        'description' => 'Common SPARQL query patterns for this knowledge graph',
+                        'mimeType'    => 'text/plain',
+                    ],
+                ],
             ];
-            break;    
-            
+            break;
+
  		//--------------------------------------------------------------------------------
         case 'resources/read':
-            // We don't actually implement any resources yet.
-            $response['error'] = [
-                'code'    => -32001,
-                'message' => 'No resources are implemented by this server.',
-            ];
+            $uri = $params['uri'] ?? null;
+
+            if ($uri === 'sparql://schema') {
+                $content = <<<TEXT
+# Knowledge Graph Schema
+
+This knowledge graph uses schema.org vocabulary (https://schema.org/).
+
+## Main Entity Types
+
+- **schema:ScholarlyArticle** - Academic papers and publications
+  - Properties:
+    - schema:identifier - DOI or other identifier
+    - schema:name - Title of the article
+    - schema:author - Links to Person entities
+    - schema:datePublished - Publication date
+
+- **schema:Person** - Authors and contributors
+  - Properties:
+    - schema:name - Full name of the person
+    - schema:givenName - First name
+    - schema:familyName - Last name
+
+## Common Prefixes
+
+PREFIX schema: <https://schema.org/>
+
+TEXT;
+
+                $response['result'] = [
+                    'contents' => [
+                        [
+                            'uri'      => 'sparql://schema',
+                            'mimeType' => 'text/plain',
+                            'text'     => $content,
+                        ],
+                    ],
+                ];
+            } elseif ($uri === 'sparql://examples') {
+                $content = <<<TEXT
+# Example SPARQL Queries
+
+## Find all properties of an article by DOI
+
+SELECT ?property ?value WHERE {
+  ?article a schema:ScholarlyArticle ;
+           schema:identifier ?doi ;
+           ?property ?value .
+  FILTER( LCASE(STR(?doi)) = LCASE("10.1234/example") )
+}
+
+## List all authors
+
+SELECT DISTINCT ?name WHERE {
+  ?person a schema:Person ;
+          schema:name ?name .
+}
+ORDER BY ?name
+
+## Find articles by a specific author
+
+SELECT ?articleName WHERE {
+  ?article a schema:ScholarlyArticle ;
+           schema:name ?articleName ;
+           schema:author ?author .
+  ?author schema:name "John Doe" .
+}
+
+TEXT;
+
+                $response['result'] = [
+                    'contents' => [
+                        [
+                            'uri'      => 'sparql://examples',
+                            'mimeType' => 'text/plain',
+                            'text'     => $content,
+                        ],
+                    ],
+                ];
+            } else {
+                $response['error'] = [
+                    'code'    => -32002,
+                    'message' => 'Unknown resource URI: ' . $uri,
+                ];
+            }
             break;                    
 
 		//--------------------------------------------------------------------------------
