@@ -216,24 +216,26 @@ function format_sparql_result_as_text(array $result)
 }
 
 //----------------------------------------------------------------------------------------
-// Optional: higher-level DOI helper (only if you’re using the authorsByDoi pattern)
-// (You can comment this out if not using it)
-function build_authors_by_doi_query($doi)
+// Get authors of a work by its URI (DOI, URL, etc.)
+function build_authors_of_work_query($uri)
 {
-    $doiLiteral = str_replace('"', '\"', $doi);
-
     $query = <<<SPARQL
 PREFIX schema: <https://schema.org/>
 
 SELECT DISTINCT ?authorName WHERE {
-  ?article a schema:ScholarlyArticle ;
-           schema:identifier ?doi ;
-           schema:author ?author .
+  <$uri> schema:creator ?author .
 
-  ?author a schema:Person ;
-          schema:name ?authorName .
+  ?author a schema:Person .
 
-  FILTER( LCASE(STR(?doi)) = LCASE("$doiLiteral") )
+  {
+    ?author schema:name ?authorName .
+  }
+  UNION
+  {
+    ?author schema:givenName ?givenName ;
+            schema:familyName ?familyName .
+    BIND(CONCAT(?givenName, " ", ?familyName) AS ?authorName)
+  }
 }
 ORDER BY ?authorName
 SPARQL;
@@ -269,7 +271,7 @@ function format_authors_result_as_text(array $result)
     }
 
     if (empty($names)) {
-        return "No authors found for that DOI.";
+        return "No authors found for that work.";
     }
 
     $out = "Authors:\n";
@@ -355,20 +357,25 @@ function handleRequest(array $request)
 
 This knowledge graph uses schema.org vocabulary (https://schema.org/).
 
+## URI Structure
+
+- Works are identified by their URI (e.g., https://doi.org/10.1234/foo.bar)
+- DOIs use the format: https://doi.org/[DOI]
+
 ## Main Entity Types
 
-- **schema:ScholarlyArticle** - Academic papers and publications
+- **Works** (various types like schema:ScholarlyArticle, schema:Book, etc.)
   - Properties:
-    - schema:identifier - DOI or other identifier
-    - schema:name - Title of the article
-    - schema:author - Links to Person entities
+    - schema:name - Title of the work
+    - schema:creator - Links to Person entities (creators/authors)
     - schema:datePublished - Publication date
 
 - **schema:Person** - Authors and contributors
   - Properties:
     - schema:name - Full name of the person
-    - schema:givenName - First name
-    - schema:familyName - Last name
+    - schema:givenName - First name (when name is split)
+    - schema:familyName - Last name (when name is split)
+  - Note: A person may have either schema:name OR both givenName and familyName
 
 ## Common Prefixes
 
@@ -391,31 +398,53 @@ TEXT;
                     $content = <<<TEXT
 # Example SPARQL Queries
 
-## Find all properties of an article by DOI
+## Find all properties of a work by URI
 
 SELECT ?property ?value WHERE {
-  ?article a schema:ScholarlyArticle ;
-           schema:identifier ?doi ;
-           ?property ?value .
-  FILTER( LCASE(STR(?doi)) = LCASE("10.1234/example") )
+  <https://doi.org/10.1234/example> ?property ?value .
 }
 
-## List all authors
+## List all creators/authors (handling different name formats)
 
-SELECT DISTINCT ?name WHERE {
-  ?person a schema:Person ;
-          schema:name ?name .
+SELECT DISTINCT ?authorName WHERE {
+  ?person a schema:Person .
+  {
+    ?person schema:name ?authorName .
+  }
+  UNION
+  {
+    ?person schema:givenName ?givenName ;
+            schema:familyName ?familyName .
+    BIND(CONCAT(?givenName, " ", ?familyName) AS ?authorName)
+  }
 }
-ORDER BY ?name
+ORDER BY ?authorName
 
-## Find articles by a specific author
+## Find works by a specific creator
 
-SELECT ?articleName WHERE {
-  ?article a schema:ScholarlyArticle ;
-           schema:name ?articleName ;
-           schema:author ?author .
+SELECT ?work ?workName WHERE {
+  ?work schema:name ?workName ;
+        schema:creator ?author .
   ?author schema:name "John Doe" .
 }
+
+## Find creators of a work by URI
+
+SELECT DISTINCT ?authorName WHERE {
+  <https://doi.org/10.1234/example> schema:creator ?author .
+
+  ?author a schema:Person .
+  {
+    ?author schema:name ?authorName .
+  }
+  UNION
+  {
+    ?author schema:givenName ?givenName ;
+            schema:familyName ?familyName .
+    BIND(CONCAT(?givenName, " ", ?familyName) AS ?authorName)
+  }
+}
+ORDER BY ?authorName
 
 TEXT;
 
@@ -462,17 +491,17 @@ TEXT;
                         ],
                     ],
                     [
-                        'name'        => 'authorsByDoi',
-                        'description' => 'Given a DOI, find all authors of the corresponding schema.org ScholarlyArticle.',
+                        'name'        => 'authorsOfWork',
+                        'description' => 'Given a work URI, find all authors/creators of the work.',
                         'inputSchema' => [
                             'type'       => 'object',
                             'properties' => [
-                                'doi' => [
+                                'uri' => [
                                     'type'        => 'string',
-                                    'description' => 'DOI of the paper, e.g. "10.1234/foo.bar".',
+                                    'description' => 'URI of the work, e.g. "https://doi.org/10.1234/foo.bar" or "https://example.org/work/123".',
                                 ],
                             ],
-                            'required' => ['doi'],
+                            'required' => ['uri'],
                         ],
                     ],
                 ],
@@ -521,23 +550,23 @@ TEXT;
 					];
 					break;
 					
-				case 'authorsByDoi':
-					$doi = isset($args['doi']) ? $args['doi'] : '';
-					if (trim($doi) === '') {
+				case 'authorsOfWork':
+					$uri = $args['uri'] ?? '';
+					if (trim($uri) === '') {
 						$response['error'] = [
 							'code'    => -32602,
-							'message' => 'Missing or empty \"doi\" argument for authorsByDoi.',
+							'message' => 'Missing or empty "uri" argument for authorsOfWork.',
 						];
 						break;
 					}
-	
+
 					$endpoint = get_sparql_endpoint();
-					$query    = build_authors_by_doi_query($doi);
+					$query    = build_authors_of_work_query($uri);
 					$result   = run_sparql_query($endpoint, $query, true);
 					$text     = format_authors_result_as_text($result);
-	
+
 					$response['result'] = [
-						'toolName' => 'authorsByDoi',
+						'toolName' => 'authorsOfWork',
 						'content'  => [
 							[
 								'type' => 'text',
@@ -547,7 +576,7 @@ TEXT;
 						'meta' => [
 							'endpoint' => $endpoint,
 							'status'   => $result['ok'] ? $result['status'] : null,
-							'doi'      => $doi,
+							'uri'      => $uri,
 						],
 					];
 					break;
