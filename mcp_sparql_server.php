@@ -199,7 +199,7 @@ function run_sparql_query($endpoint, $query, $acceptJson = true)
 }
 
 //----------------------------------------------------------------------------------------
-function format_sparql_result_as_text(array $result)
+function format_sparql_result($result, $format = 'text')
 {
     if (!$result['ok']) {
         return 'SPARQL error (HTTP ' . $result['status'] . '): ' . $result['error'];
@@ -207,12 +207,18 @@ function format_sparql_result_as_text(array $result)
 
     $body = $result['body'];
 
-    $data = json_decode($body, true);
-    if (json_last_error() === JSON_ERROR_NONE && $data !== null) {
-        return json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
-    }
+    switch ($format) {
+        case 'json':
+            return $body;
 
-    return $body;
+        case 'text':
+        default:
+            $data = json_decode($body, true);
+            if (json_last_error() === JSON_ERROR_NONE && $data !== null) {
+                return json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+            }
+            return $body;
+    }
 }
 
 //----------------------------------------------------------------------------------------
@@ -252,42 +258,50 @@ SPARQL;
 }
 
 //----------------------------------------------------------------------------------------
-function format_authors_result_as_text(array $result)
+function format_authors_result($result, $format = 'text')
 {
     if (!$result['ok']) {
         return 'SPARQL error (HTTP ' . $result['status'] . '): ' . $result['error'];
     }
 
     $body = $result['body'];
-    $data = json_decode($body, true);
 
-    if (json_last_error() !== JSON_ERROR_NONE || !is_array($data)) {
-        return $body;
+    switch ($format) {
+        case 'json':
+            return $body;
+
+        case 'text':
+        default:
+            $data = json_decode($body, true);
+
+            if (json_last_error() !== JSON_ERROR_NONE || !is_array($data)) {
+                return $body;
+            }
+
+            if (!isset($data['results']['bindings'])) {
+                return json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+            }
+
+            $bindings = $data['results']['bindings'];
+            $names = [];
+
+            foreach ($bindings as $row) {
+                if (isset($row['authorName']['value'])) {
+                    $names[] = $row['authorName']['value'];
+                }
+            }
+
+            if (empty($names)) {
+                return "No authors found for that work.";
+            }
+
+            $out = "Authors:\n";
+            foreach ($names as $name) {
+                $out .= "- " . $name . "\n";
+            }
+
+            return $out;
     }
-
-    if (!isset($data['results']['bindings'])) {
-        return json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
-    }
-
-    $bindings = $data['results']['bindings'];
-    $names = [];
-
-    foreach ($bindings as $row) {
-        if (isset($row['authorName']['value'])) {
-            $names[] = $row['authorName']['value'];
-        }
-    }
-
-    if (empty($names)) {
-        return "No authors found for that work.";
-    }
-
-    $out = "Authors:\n";
-    foreach ($names as $name) {
-        $out .= "- " . $name . "\n";
-    }
-
-    return $out;
 }
 
 //----------------------------------------------------------------------------------------
@@ -330,55 +344,63 @@ SPARQL;
 }
 
 //----------------------------------------------------------------------------------------
-function format_related_works_result_as_text(array $result)
+function format_related_works_result($result, $format = 'text')
 {
     if (!$result['ok']) {
         return 'SPARQL error (HTTP ' . $result['status'] . '): ' . $result['error'];
     }
 
     $body = $result['body'];
-    $data = json_decode($body, true);
 
-    if (json_last_error() !== JSON_ERROR_NONE || !is_array($data)) {
-        return $body;
+    switch ($format) {
+        case 'json':
+            return $body;
+
+        case 'text':
+        default:
+            $data = json_decode($body, true);
+
+            if (json_last_error() !== JSON_ERROR_NONE || !is_array($data)) {
+                return $body;
+            }
+
+            if (!isset($data['results']['bindings'])) {
+                return json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+            }
+
+            $bindings = $data['results']['bindings'];
+            $works = [];
+
+            foreach ($bindings as $row) {
+                $work = [];
+                if (isset($row['other_work']['value'])) {
+                    $work['uri'] = $row['other_work']['value'];
+                }
+                if (isset($row['c']['value'])) {
+                    $work['count'] = $row['c']['value'];
+                }
+                if (isset($row['title']['value'])) {
+                    $work['title'] = $row['title']['value'];
+                }
+                if (!empty($work)) {
+                    $works[] = $work;
+                }
+            }
+
+            if (empty($works)) {
+                return "No related works found.";
+            }
+
+            $out = "Related works (by co-citation):\n\n";
+            foreach ($works as $work) {
+                $count = $work['count'] ?? '?';
+                $title = $work['title'] ?? 'Untitled';
+                $uri = $work['uri'] ?? '';
+                $out .= "[$count co-citations] $title\n  $uri\n\n";
+            }
+
+            return $out;
     }
-
-    if (!isset($data['results']['bindings'])) {
-        return json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
-    }
-
-    $bindings = $data['results']['bindings'];
-    $works = [];
-
-    foreach ($bindings as $row) {
-        $work = [];
-        if (isset($row['other_work']['value'])) {
-            $work['uri'] = $row['other_work']['value'];
-        }
-        if (isset($row['c']['value'])) {
-            $work['count'] = $row['c']['value'];
-        }
-        if (isset($row['title']['value'])) {
-            $work['title'] = $row['title']['value'];
-        }
-        if (!empty($work)) {
-            $works[] = $work;
-        }
-    }
-
-    if (empty($works)) {
-        return "No related works found.";
-    }
-
-    $out = "Related works (by co-citation):\n\n";
-    foreach ($works as $work) {
-        $count = $work['count'] ?? '?';
-        $title = $work['title'] ?? 'Untitled';
-        $uri = $work['uri'] ?? '';
-        $out .= "[$count co-citations] $title\n  $uri\n\n";
-    }
-
-    return $out;
 }
 
 //----------------------------------------------------------------------------------------
@@ -404,51 +426,59 @@ SPARQL;
 }
 
 //----------------------------------------------------------------------------------------
-function format_cites_result_as_text(array $result)
+function format_cites_result($result, $format = 'text')
 {
     if (!$result['ok']) {
         return 'SPARQL error (HTTP ' . $result['status'] . '): ' . $result['error'];
     }
 
     $body = $result['body'];
-    $data = json_decode($body, true);
 
-    if (json_last_error() !== JSON_ERROR_NONE || !is_array($data)) {
-        return $body;
+    switch ($format) {
+        case 'json':
+            return $body;
+
+        case 'text':
+        default:
+            $data = json_decode($body, true);
+
+            if (json_last_error() !== JSON_ERROR_NONE || !is_array($data)) {
+                return $body;
+            }
+
+            if (!isset($data['results']['bindings'])) {
+                return json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+            }
+
+            $bindings = $data['results']['bindings'];
+            $citations = [];
+
+            foreach ($bindings as $row) {
+                $cite = [];
+                if (isset($row['citation']['value'])) {
+                    $cite['uri'] = $row['citation']['value'];
+                }
+                if (isset($row['title']['value'])) {
+                    $cite['title'] = $row['title']['value'];
+                }
+                if (!empty($cite)) {
+                    $citations[] = $cite;
+                }
+            }
+
+            if (empty($citations)) {
+                return "No citations found.";
+            }
+
+            $out = "Citations:\n\n";
+            foreach ($citations as $cite) {
+                $title = $cite['title'] ?? 'Untitled';
+                $uri = $cite['uri'] ?? '';
+                $out .= "$title\n  $uri\n\n";
+            }
+
+            return $out;
     }
-
-    if (!isset($data['results']['bindings'])) {
-        return json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
-    }
-
-    $bindings = $data['results']['bindings'];
-    $citations = [];
-
-    foreach ($bindings as $row) {
-        $cite = [];
-        if (isset($row['citation']['value'])) {
-            $cite['uri'] = $row['citation']['value'];
-        }
-        if (isset($row['title']['value'])) {
-            $cite['title'] = $row['title']['value'];
-        }
-        if (!empty($cite)) {
-            $citations[] = $cite;
-        }
-    }
-
-    if (empty($citations)) {
-        return "No citations found.";
-    }
-
-    $out = "Citations:\n\n";
-    foreach ($citations as $cite) {
-        $title = $cite['title'] ?? 'Untitled';
-        $uri = $cite['uri'] ?? '';
-        $out .= "$title\n  $uri\n\n";
-    }
-
-    return $out;
 }
 
 //----------------------------------------------------------------------------------------
@@ -474,51 +504,59 @@ SPARQL;
 }
 
 //----------------------------------------------------------------------------------------
-function format_cited_by_result_as_text(array $result)
+function format_cited_by_result($result, $format = 'text')
 {
     if (!$result['ok']) {
         return 'SPARQL error (HTTP ' . $result['status'] . '): ' . $result['error'];
     }
 
     $body = $result['body'];
-    $data = json_decode($body, true);
 
-    if (json_last_error() !== JSON_ERROR_NONE || !is_array($data)) {
-        return $body;
+    switch ($format) {
+        case 'json':
+            return $body;
+
+        case 'text':
+        default:
+            $data = json_decode($body, true);
+
+            if (json_last_error() !== JSON_ERROR_NONE || !is_array($data)) {
+                return $body;
+            }
+
+            if (!isset($data['results']['bindings'])) {
+                return json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+            }
+
+            $bindings = $data['results']['bindings'];
+            $citing = [];
+
+            foreach ($bindings as $row) {
+                $cite = [];
+                if (isset($row['cites']['value'])) {
+                    $cite['uri'] = $row['cites']['value'];
+                }
+                if (isset($row['title']['value'])) {
+                    $cite['title'] = $row['title']['value'];
+                }
+                if (!empty($cite)) {
+                    $citing[] = $cite;
+                }
+            }
+
+            if (empty($citing)) {
+                return "No citing works found.";
+            }
+
+            $out = "Cited by:\n\n";
+            foreach ($citing as $cite) {
+                $title = $cite['title'] ?? 'Untitled';
+                $uri = $cite['uri'] ?? '';
+                $out .= "$title\n  $uri\n\n";
+            }
+
+            return $out;
     }
-
-    if (!isset($data['results']['bindings'])) {
-        return json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
-    }
-
-    $bindings = $data['results']['bindings'];
-    $citing = [];
-
-    foreach ($bindings as $row) {
-        $cite = [];
-        if (isset($row['cites']['value'])) {
-            $cite['uri'] = $row['cites']['value'];
-        }
-        if (isset($row['title']['value'])) {
-            $cite['title'] = $row['title']['value'];
-        }
-        if (!empty($cite)) {
-            $citing[] = $cite;
-        }
-    }
-
-    if (empty($citing)) {
-        return "No citing works found.";
-    }
-
-    $out = "Cited by:\n\n";
-    foreach ($citing as $cite) {
-        $title = $cite['title'] ?? 'Untitled';
-        $uri = $cite['uri'] ?? '';
-        $out .= "$title\n  $uri\n\n";
-    }
-
-    return $out;
 }
 
 // ---- MCP REQUEST HANDLER ----------------------------------------------
@@ -833,7 +871,7 @@ TEXT;
 	
 					$endpoint = get_sparql_endpoint();
 					$result   = run_sparql_query($endpoint, $query, $jsonPreferred);
-					$text     = format_sparql_result_as_text($result);
+					$text     = format_sparql_result($result);
 	
 					$response['result'] = [
 						'toolName' => 'sparqlQuery',
@@ -863,7 +901,7 @@ TEXT;
 					$endpoint = get_sparql_endpoint();
 					$query    = build_authors_of_work_query($uri);
 					$result   = run_sparql_query($endpoint, $query, true);
-					$text     = format_authors_result_as_text($result);
+					$text     = format_authors_result($result);
 
 					$response['result'] = [
 						'toolName' => 'authorsOfWork',
@@ -894,7 +932,7 @@ TEXT;
 					$endpoint = get_sparql_endpoint();
 					$query    = build_related_works_query($uri);
 					$result   = run_sparql_query($endpoint, $query, true);
-					$text     = format_related_works_result_as_text($result);
+					$text     = format_related_works_result($result);
 
 					$response['result'] = [
 						'toolName' => 'relatedWorks',
@@ -925,7 +963,7 @@ TEXT;
 					$endpoint = get_sparql_endpoint();
 					$query    = build_cites_query($uri);
 					$result   = run_sparql_query($endpoint, $query, true);
-					$text     = format_cites_result_as_text($result);
+					$text     = format_cites_result($result);
 
 					$response['result'] = [
 						'toolName' => 'cites',
@@ -956,7 +994,7 @@ TEXT;
 					$endpoint = get_sparql_endpoint();
 					$query    = build_cited_by_query($uri);
 					$result   = run_sparql_query($endpoint, $query, true);
-					$text     = format_cited_by_result_as_text($result);
+					$text     = format_cited_by_result($result);
 
 					$response['result'] = [
 						'toolName' => 'citedBy',
