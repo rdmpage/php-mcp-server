@@ -451,6 +451,76 @@ function format_cites_result_as_text(array $result)
     return $out;
 }
 
+//----------------------------------------------------------------------------------------
+// Find works that cite a given work
+function build_cited_by_query($uri)
+{
+    $query = <<<SPARQL
+PREFIX : <http://schema.org/>
+
+SELECT ?cites (SAMPLE(?rawTitle) AS ?title)
+WHERE
+{
+  ?cites :citation <$uri> .
+  OPTIONAL
+  {
+     ?cites :name ?rawTitle .
+  }
+}
+GROUP BY ?cites
+SPARQL;
+
+    return $query;
+}
+
+//----------------------------------------------------------------------------------------
+function format_cited_by_result_as_text(array $result)
+{
+    if (!$result['ok']) {
+        return 'SPARQL error (HTTP ' . $result['status'] . '): ' . $result['error'];
+    }
+
+    $body = $result['body'];
+    $data = json_decode($body, true);
+
+    if (json_last_error() !== JSON_ERROR_NONE || !is_array($data)) {
+        return $body;
+    }
+
+    if (!isset($data['results']['bindings'])) {
+        return json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+    }
+
+    $bindings = $data['results']['bindings'];
+    $citing = [];
+
+    foreach ($bindings as $row) {
+        $cite = [];
+        if (isset($row['cites']['value'])) {
+            $cite['uri'] = $row['cites']['value'];
+        }
+        if (isset($row['title']['value'])) {
+            $cite['title'] = $row['title']['value'];
+        }
+        if (!empty($cite)) {
+            $citing[] = $cite;
+        }
+    }
+
+    if (empty($citing)) {
+        return "No citing works found.";
+    }
+
+    $out = "Cited by:\n\n";
+    foreach ($citing as $cite) {
+        $title = $cite['title'] ?? 'Untitled';
+        $uri = $cite['uri'] ?? '';
+        $out .= "$title\n  $uri\n\n";
+    }
+
+    return $out;
+}
+
 // ---- MCP REQUEST HANDLER ----------------------------------------------
 
 function handleRequest(array $request)
@@ -720,6 +790,20 @@ TEXT;
                             'required' => ['uri'],
                         ],
                     ],
+                    [
+                        'name'        => 'citedBy',
+                        'description' => 'Find all works that cite the given work.',
+                        'inputSchema' => [
+                            'type'       => 'object',
+                            'properties' => [
+                                'uri' => [
+                                    'type'        => 'string',
+                                    'description' => 'URI of the work, e.g. "https://doi.org/10.1234/foo.bar".',
+                                ],
+                            ],
+                            'required' => ['uri'],
+                        ],
+                    ],
                 ],
             ];
             break;
@@ -845,6 +929,37 @@ TEXT;
 
 					$response['result'] = [
 						'toolName' => 'cites',
+						'content'  => [
+							[
+								'type' => 'text',
+								'text' => $text,
+							],
+						],
+						'meta' => [
+							'endpoint' => $endpoint,
+							'status'   => $result['ok'] ? $result['status'] : null,
+							'uri'      => $uri,
+						],
+					];
+					break;
+
+				case 'citedBy':
+					$uri = $args['uri'] ?? '';
+					if (trim($uri) === '') {
+						$response['error'] = [
+							'code'    => -32602,
+							'message' => 'Missing or empty "uri" argument for citedBy.',
+						];
+						break;
+					}
+
+					$endpoint = get_sparql_endpoint();
+					$query    = build_cited_by_query($uri);
+					$result   = run_sparql_query($endpoint, $query, true);
+					$text     = format_cited_by_result_as_text($result);
+
+					$response['result'] = [
+						'toolName' => 'citedBy',
 						'content'  => [
 							[
 								'type' => 'text',
