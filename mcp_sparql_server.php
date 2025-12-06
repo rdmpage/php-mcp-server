@@ -559,6 +559,179 @@ function format_cited_by_result($result, $format = 'text')
     }
 }
 
+//----------------------------------------------------------------------------------------
+// Find funders of a work
+function build_work_funders_query($uri)
+{
+    $query = <<<SPARQL
+PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+PREFIX : <http://schema.org/>
+
+SELECT ?funder (SAMPLE(?rawName) AS ?name)
+WHERE
+{
+  VALUES ?work {<$uri> }
+  {
+  ?work :funder ?funder .
+  }
+  UNION
+  {
+    ?work :funding ?award .
+    ?award :funder ?funder .
+  }
+  ?funder :name ?rawName .
+}
+GROUP BY ?funder
+SPARQL;
+
+    return $query;
+}
+
+//----------------------------------------------------------------------------------------
+function format_work_funders_result($result, $format = 'text')
+{
+    if (!$result['ok']) {
+        return 'SPARQL error (HTTP ' . $result['status'] . '): ' . $result['error'];
+    }
+
+    $body = $result['body'];
+
+    switch ($format) {
+        case 'json':
+            return $body;
+
+        case 'text':
+        default:
+            $data = json_decode($body, true);
+
+            if (json_last_error() !== JSON_ERROR_NONE || !is_array($data)) {
+                return $body;
+            }
+
+            if (!isset($data['results']['bindings'])) {
+                return json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+            }
+
+            $bindings = $data['results']['bindings'];
+            $funders = [];
+
+            foreach ($bindings as $row) {
+                $funder = [];
+                if (isset($row['funder']['value'])) {
+                    $funder['uri'] = $row['funder']['value'];
+                }
+                if (isset($row['name']['value'])) {
+                    $funder['name'] = $row['name']['value'];
+                }
+                if (!empty($funder)) {
+                    $funders[] = $funder;
+                }
+            }
+
+            if (empty($funders)) {
+                return "No funders found.";
+            }
+
+            $out = "Funders:\n\n";
+            foreach ($funders as $funder) {
+                $name = $funder['name'] ?? 'Unnamed';
+                $uri = $funder['uri'] ?? '';
+                $out .= "$name\n  $uri\n\n";
+            }
+
+            return $out;
+    }
+}
+
+//----------------------------------------------------------------------------------------
+// Find works funded by a funder
+function build_funded_works_query($uri)
+{
+    $query = <<<SPARQL
+PREFIX : <http://schema.org/>
+
+SELECT ?work ?award (SAMPLE(?rawName) AS ?name)
+WHERE
+{
+  VALUES ?funder  {<$uri> }
+  {
+    ?work :funder ?funder .
+  }
+  UNION
+  {
+    ?work :funding ?funding .
+    ?funding :identifier ?award .
+    ?funding :funder ?funder .
+  }
+  ?work :name ?rawName .
+}
+GROUP BY ?work ?award
+SPARQL;
+
+    return $query;
+}
+
+//----------------------------------------------------------------------------------------
+function format_funded_works_result($result, $format = 'text')
+{
+    if (!$result['ok']) {
+        return 'SPARQL error (HTTP ' . $result['status'] . '): ' . $result['error'];
+    }
+
+    $body = $result['body'];
+
+    switch ($format) {
+        case 'json':
+            return $body;
+
+        case 'text':
+        default:
+            $data = json_decode($body, true);
+
+            if (json_last_error() !== JSON_ERROR_NONE || !is_array($data)) {
+                return $body;
+            }
+
+            if (!isset($data['results']['bindings'])) {
+                return json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+            }
+
+            $bindings = $data['results']['bindings'];
+            $works = [];
+
+            foreach ($bindings as $row) {
+                $work = [];
+                if (isset($row['work']['value'])) {
+                    $work['uri'] = $row['work']['value'];
+                }
+                if (isset($row['award']['value'])) {
+                    $work['award'] = $row['award']['value'];
+                }
+                if (isset($row['name']['value'])) {
+                    $work['name'] = $row['name']['value'];
+                }
+                if (!empty($work)) {
+                    $works[] = $work;
+                }
+            }
+
+            if (empty($works)) {
+                return "No funded works found.";
+            }
+
+            $out = "Funded works:\n\n";
+            foreach ($works as $work) {
+                $name = $work['name'] ?? 'Untitled';
+                $uri = $work['uri'] ?? '';
+                $award = isset($work['award']) ? " [Award: {$work['award']}]" : '';
+                $out .= "$name$award\n  $uri\n\n";
+            }
+
+            return $out;
+    }
+}
+
 // ---- MCP REQUEST HANDLER ----------------------------------------------
 
 function handleRequest(array $request)
@@ -842,6 +1015,34 @@ TEXT;
                             'required' => ['uri'],
                         ],
                     ],
+                    [
+                        'name'        => 'workFunders',
+                        'description' => 'Find organizations that funded a given work.',
+                        'inputSchema' => [
+                            'type'       => 'object',
+                            'properties' => [
+                                'uri' => [
+                                    'type'        => 'string',
+                                    'description' => 'URI of the work, e.g. "https://doi.org/10.1234/foo.bar".',
+                                ],
+                            ],
+                            'required' => ['uri'],
+                        ],
+                    ],
+                    [
+                        'name'        => 'fundedWorks',
+                        'description' => 'Find works and awards funded by a given organization.',
+                        'inputSchema' => [
+                            'type'       => 'object',
+                            'properties' => [
+                                'uri' => [
+                                    'type'        => 'string',
+                                    'description' => 'URI of the funder, e.g. "https://doi.org/10.13039/100000001".',
+                                ],
+                            ],
+                            'required' => ['uri'],
+                        ],
+                    ],
                 ],
             ];
             break;
@@ -998,6 +1199,68 @@ TEXT;
 
 					$response['result'] = [
 						'toolName' => 'citedBy',
+						'content'  => [
+							[
+								'type' => 'text',
+								'text' => $text,
+							],
+						],
+						'meta' => [
+							'endpoint' => $endpoint,
+							'status'   => $result['ok'] ? $result['status'] : null,
+							'uri'      => $uri,
+						],
+					];
+					break;
+
+				case 'workFunders':
+					$uri = $args['uri'] ?? '';
+					if (trim($uri) === '') {
+						$response['error'] = [
+							'code'    => -32602,
+							'message' => 'Missing or empty "uri" argument for workFunders.',
+						];
+						break;
+					}
+
+					$endpoint = get_sparql_endpoint();
+					$query    = build_work_funders_query($uri);
+					$result   = run_sparql_query($endpoint, $query, true);
+					$text     = format_work_funders_result($result);
+
+					$response['result'] = [
+						'toolName' => 'workFunders',
+						'content'  => [
+							[
+								'type' => 'text',
+								'text' => $text,
+							],
+						],
+						'meta' => [
+							'endpoint' => $endpoint,
+							'status'   => $result['ok'] ? $result['status'] : null,
+							'uri'      => $uri,
+						],
+					];
+					break;
+
+				case 'fundedWorks':
+					$uri = $args['uri'] ?? '';
+					if (trim($uri) === '') {
+						$response['error'] = [
+							'code'    => -32602,
+							'message' => 'Missing or empty "uri" argument for fundedWorks.',
+						];
+						break;
+					}
+
+					$endpoint = get_sparql_endpoint();
+					$query    = build_funded_works_query($uri);
+					$result   = run_sparql_query($endpoint, $query, true);
+					$text     = format_funded_works_result($result);
+
+					$response['result'] = [
+						'toolName' => 'fundedWorks',
 						'content'  => [
 							[
 								'type' => 'text',
