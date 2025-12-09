@@ -732,6 +732,92 @@ function format_funded_works_result($result, $format = 'text')
     }
 }
 
+//----------------------------------------------------------------------------------------
+// List all types in the knowledge graph
+function build_list_types_query()
+{
+    $query = <<<SPARQL
+PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+SELECT ?type ?label (COUNT(?thing) AS ?count) WHERE {
+	?thing a ?type .
+	OPTIONAL
+    {
+		?type rdfs:label ?label .
+	}
+}
+GROUP BY ?type ?label
+ORDER BY DESC(?count)
+SPARQL;
+
+    return $query;
+}
+
+//----------------------------------------------------------------------------------------
+function format_list_types_result($result, $format = 'text')
+{
+    if (!$result['ok']) {
+        return 'SPARQL error (HTTP ' . $result['status'] . '): ' . $result['error'];
+    }
+
+    $body = $result['body'];
+
+    switch ($format) {
+        case 'json':
+            return $body;
+
+        case 'text':
+        default:
+            $data = json_decode($body, true);
+
+            if (json_last_error() !== JSON_ERROR_NONE || !is_array($data)) {
+                return $body;
+            }
+
+            if (!isset($data['results']['bindings'])) {
+                return json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+            }
+
+            $bindings = $data['results']['bindings'];
+            $types = [];
+
+            foreach ($bindings as $row) {
+                $type = [];
+                if (isset($row['type']['value'])) {
+                    $type['uri'] = $row['type']['value'];
+                }
+                if (isset($row['label']['value'])) {
+                    $type['label'] = $row['label']['value'];
+                }
+                if (isset($row['count']['value'])) {
+                    $type['count'] = $row['count']['value'];
+                }
+                if (!empty($type)) {
+                    $types[] = $type;
+                }
+            }
+
+            if (empty($types)) {
+                return "No types found.";
+            }
+
+            $out = "Types in knowledge graph:\n\n";
+            foreach ($types as $type) {
+                $label = $type['label'] ?? '';
+                $uri = $type['uri'] ?? '';
+                $count = $type['count'] ?? '0';
+
+                if ($label) {
+                    $out .= "$label ($count instances)\n  $uri\n\n";
+                } else {
+                    $out .= "$uri ($count instances)\n\n";
+                }
+            }
+
+            return $out;
+    }
+}
+
 // ---- MCP REQUEST HANDLER ----------------------------------------------
 
 function handleRequest(array $request)
@@ -1043,6 +1129,14 @@ TEXT;
                             'required' => ['uri'],
                         ],
                     ],
+                    [
+                        'name'        => 'listTypes',
+                        'description' => 'List all types of entities in the knowledge graph with counts.',
+                        'inputSchema' => [
+                            'type'       => 'object',
+                            'properties' => new stdclass,
+                        ],
+                    ],
                 ],
             ];
             break;
@@ -1271,6 +1365,27 @@ TEXT;
 							'endpoint' => $endpoint,
 							'status'   => $result['ok'] ? $result['status'] : null,
 							'uri'      => $uri,
+						],
+					];
+					break;
+
+				case 'listTypes':
+					$endpoint = get_sparql_endpoint();
+					$query    = build_list_types_query();
+					$result   = run_sparql_query($endpoint, $query, true);
+					$text     = format_list_types_result($result);
+
+					$response['result'] = [
+						'toolName' => 'listTypes',
+						'content'  => [
+							[
+								'type' => 'text',
+								'text' => $text,
+							],
+						],
+						'meta' => [
+							'endpoint' => $endpoint,
+							'status'   => $result['ok'] ? $result['status'] : null,
 						],
 					];
 					break;
