@@ -1,16 +1,20 @@
-# Testing Guide for SPARQL Tools
+# Testing Guide for PHP MCP Server
 
 ## ✅ What We've Created
 
-A complete unit testing setup with **15 tests** covering:
+A complete testing setup with **23 tests** covering both unit and integration testing:
 
 ### Files Created
 - `composer.json` - Defines PHPUnit as a dependency
 - `phpunit.xml` - PHPUnit configuration
-- `tests/SparqlToolsTest.php` - 15 unit tests with 49 assertions
+- `tests/SparqlToolsTest.php` - 15 unit tests (SPARQL functions)
+- `tests/McpServerIntegrationTest.php` - 8 integration tests (MCP protocol)
 - `tests/README.md` - Testing documentation
 
 ### Test Coverage
+
+#### Unit Tests (15 tests, 49 assertions)
+Test individual SPARQL functions in isolation with mock data:
 
 **Query Builders (3 tests):**
 - ✔ Build authors of work query
@@ -37,6 +41,19 @@ A complete unit testing setup with **15 tests** covering:
 **Format Switching (1 test):**
 - ✔ Format switching (tests all formatters support json/text)
 
+#### Integration Tests (8 tests, 120 assertions)
+Test the actual MCP server by launching it as a subprocess and communicating via the MCP protocol:
+
+**Protocol Tests:**
+- ✔ Initialize - Server returns proper capabilities and info
+- ✔ Tools list - Returns all available tools
+- ✔ Resources list - Returns available resources
+- ✔ Resources read - Can read resource content
+- ✔ Unknown method - Returns proper error for unknown methods
+- ✔ Notification handling - Handles notifications without id
+- ✔ Ping - Responds to ping requests
+- ✔ Multiple sequential requests - Handles multiple requests correctly
+
 ## 🚀 Quick Start
 
 1. **Install dependencies:**
@@ -57,6 +74,16 @@ A complete unit testing setup with **15 tests** covering:
 ## 📊 Current Test Results
 
 ```
+Mcp Server Integration
+ ✔ Initialize
+ ✔ Tools list
+ ✔ Resources list
+ ✔ Resources read
+ ✔ Unknown method
+ ✔ Notification handling
+ ✔ Ping
+ ✔ Multiple sequential requests
+
 Sparql Tools
  ✔ Build authors of work query
  ✔ Build cites query
@@ -74,12 +101,16 @@ Sparql Tools
  ✔ Format list types result no label
  ✔ Format switching
 
-OK (15 tests, 49 assertions)
+OK (23 tests, 169 assertions)
 ```
 
 ## 📝 How Tests Work
 
-### 1. Query Builder Tests
+### Unit Tests
+
+These test individual functions in isolation using mock data (no real SPARQL endpoint needed).
+
+#### 1. Query Builder Tests
 These verify that SPARQL queries are correctly generated:
 
 ```php
@@ -120,7 +151,7 @@ public function testFormatAuthorsResultText()
 }
 ```
 
-### 3. Error Tests
+#### 3. Error Tests
 Verify graceful error handling:
 
 ```php
@@ -138,6 +169,45 @@ public function testFormatAuthorsResultError()
     $this->assertStringContainsString('500', $output);
 }
 ```
+
+### Integration Tests
+
+These test the complete MCP server by actually launching it and communicating over stdio:
+
+```php
+public function testInitialize()
+{
+    // Start the actual MCP server as a subprocess
+    $this->sendMessage([
+        'jsonrpc' => '2.0',
+        'id' => 1,
+        'method' => 'initialize',
+        'params' => []
+    ]);
+
+    // Read response from the server
+    $response = $this->readMessage();
+
+    // Verify response structure
+    $this->assertEquals('2.0', $response['jsonrpc']);
+    $this->assertArrayHasKey('result', $response);
+    $this->assertEquals('php-sparql-mcp', $response['result']['serverInfo']['name']);
+}
+```
+
+**What integration tests verify:**
+- Server starts correctly
+- MCP protocol messages are handled properly (Content-Length framing)
+- All MCP methods work (initialize, tools/list, resources/list, etc.)
+- Multiple sequential requests work correctly
+- Error handling for unknown methods
+- Notification handling (messages without id)
+
+**Benefits:**
+- Tests the complete system end-to-end
+- Catches integration issues that unit tests miss
+- Verifies MCP protocol compliance
+- Tests real subprocess communication
 
 ## 🔍 Understanding Test Output
 
@@ -193,9 +263,11 @@ public function testFormatMyNewResult()
 
 These are more advanced and can be added later:
 
-- ❌ `run_sparql_query()` - Requires HTTP mocking
-- ❌ MCP protocol functions - Requires STDIN/STDOUT mocking
-- ❌ Integration tests with real SPARQL endpoint
+- ❌ `run_sparql_query()` - Requires HTTP mocking or real SPARQL endpoint
+- ❌ Actual SPARQL queries against real endpoint - Would require test SPARQL server
+- ❌ `tools/call` with real SPARQL queries - Needs either mocking or test endpoint
+- ❌ Performance testing - Load testing with many concurrent requests
+- ❌ Error recovery - What happens if SPARQL endpoint goes down mid-request
 
 ## 💡 Testing Best Practices
 
