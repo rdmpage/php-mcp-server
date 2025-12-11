@@ -26,7 +26,7 @@ function get_sparql_endpoint()
 
 function run_sparql_query($endpoint, $query, $acceptJson = true)
 {
-    fwrite(STDERR, "[php-sparql-mcp] Running SPARQL query against $endpoint\n");
+    error_log("[php-sparql-mcp] Running SPARQL query against $endpoint");
 
     $ch = curl_init();
 
@@ -58,7 +58,7 @@ function run_sparql_query($endpoint, $query, $acceptJson = true)
     curl_close($ch);
 
     if ($errno) {
-        fwrite(STDERR, "[php-sparql-mcp] cURL error: $error\n");
+        error_log("[php-sparql-mcp] cURL error: $error");
         return [
             'ok'     => false,
             'error'  => 'cURL error: ' . $error,
