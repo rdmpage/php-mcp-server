@@ -693,3 +693,86 @@ function format_list_types_result($result, $format = 'text')
             return $out;
     }
 }
+
+//----------------------------------------------------------------------------------------
+// List literal predicates for a given entity type
+function build_list_type_properties_query($uri)
+{
+    $query = <<<SPARQL
+PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+
+SELECT ?p (COUNT(?p) AS ?count) WHERE
+{
+  {
+    SELECT ?s
+    WHERE
+    {
+      ?s rdf:type <$uri> .
+    }
+    LIMIT 1000
+  }
+
+  ?s ?p ?o .
+  FILTER isLiteral(?o)
+}
+GROUP BY ?p
+SPARQL;
+
+    return $query;
+}
+
+//----------------------------------------------------------------------------------------
+function format_list_type_properties_result($result, $format = 'text')
+{
+    if (!$result['ok']) {
+        return 'SPARQL error (HTTP ' . $result['status'] . '): ' . $result['error'];
+    }
+
+    $body = $result['body'];
+
+    switch ($format) {
+        case 'json':
+            return $body;
+
+        case 'text':
+        default:
+            $data = json_decode($body, true);
+
+            if (json_last_error() !== JSON_ERROR_NONE || !is_array($data)) {
+                return $body;
+            }
+
+            if (!isset($data['results']['bindings'])) {
+                return json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+            }
+
+            $bindings = $data['results']['bindings'];
+            $properties = [];
+
+            foreach ($bindings as $row) {
+                $prop = [];
+                if (isset($row['p']['value'])) {
+                    $prop['uri'] = $row['p']['value'];
+                }
+                if (isset($row['count']['value'])) {
+                    $prop['count'] = $row['count']['value'];
+                }
+                if (!empty($prop)) {
+                    $properties[] = $prop;
+                }
+            }
+
+            if (empty($properties)) {
+                return "No literal properties found for this type.";
+            }
+
+            $out = "Literal properties:\n\n";
+            foreach ($properties as $prop) {
+                $uri = $prop['uri'] ?? '';
+                $count = $prop['count'] ?? '0';
+                $out .= "$uri ($count occurrences)\n";
+            }
+
+            return $out;
+    }
+}

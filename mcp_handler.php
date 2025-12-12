@@ -323,6 +323,20 @@ TEXT;
                             'properties' => new stdclass,
                         ],
                     ],
+                    [
+                        'name'        => 'listTypeProperties',
+                        'description' => 'List literal properties (predicates with string values) for a given entity type, sampled from up to 1000 entities.',
+                        'inputSchema' => [
+                            'type'       => 'object',
+                            'properties' => [
+                                'uri' => [
+                                    'type'        => 'string',
+                                    'description' => 'URI of the entity type, e.g. "http://schema.org/ScholarlyArticle".',
+                                ],
+                            ],
+                            'required' => ['uri'],
+                        ],
+                    ],
                 ],
             ];
             break;
@@ -572,6 +586,37 @@ TEXT;
 						'meta' => [
 							'endpoint' => $endpoint,
 							'status'   => $result['ok'] ? $result['status'] : null,
+						],
+					];
+					break;
+
+				case 'listTypeProperties':
+					$uri = $args['uri'] ?? '';
+					if (trim($uri) === '') {
+						$response['error'] = [
+							'code'    => -32602,
+							'message' => 'Missing or empty "uri" argument for listTypeProperties.',
+						];
+						break;
+					}
+
+					$endpoint = get_sparql_endpoint();
+					$query    = build_list_type_properties_query($uri);
+					$result   = run_sparql_query($endpoint, $query, true);
+					$text     = format_list_type_properties_result($result);
+
+					$response['result'] = [
+						'toolName' => 'listTypeProperties',
+						'content'  => [
+							[
+								'type' => 'text',
+								'text' => $text,
+							],
+						],
+						'meta' => [
+							'endpoint' => $endpoint,
+							'status'   => $result['ok'] ? $result['status'] : null,
+							'uri'      => $uri,
 						],
 					];
 					break;
