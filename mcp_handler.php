@@ -337,6 +337,20 @@ TEXT;
                             'required' => ['uri'],
                         ],
                     ],
+                    [
+                        'name'        => 'listTypeLinks',
+                        'description' => 'List entity links (neighborhood graph) for a given entity type, showing both outgoing and incoming links to other entities. Samples up to 1000 entities and groups by predicate, direction, and target type.',
+                        'inputSchema' => [
+                            'type'       => 'object',
+                            'properties' => [
+                                'uri' => [
+                                    'type'        => 'string',
+                                    'description' => 'URI of the entity type, e.g. "http://schema.org/ScholarlyArticle".',
+                                ],
+                            ],
+                            'required' => ['uri'],
+                        ],
+                    ],
                 ],
             ];
             break;
@@ -607,6 +621,37 @@ TEXT;
 
 					$response['result'] = [
 						'toolName' => 'listTypeProperties',
+						'content'  => [
+							[
+								'type' => 'text',
+								'text' => $text,
+							],
+						],
+						'meta' => [
+							'endpoint' => $endpoint,
+							'status'   => $result['ok'] ? $result['status'] : null,
+							'uri'      => $uri,
+						],
+					];
+					break;
+
+				case 'listTypeLinks':
+					$uri = $args['uri'] ?? '';
+					if (trim($uri) === '') {
+						$response['error'] = [
+							'code'    => -32602,
+							'message' => 'Missing or empty "uri" argument for listTypeLinks.',
+						];
+						break;
+					}
+
+					$endpoint = get_sparql_endpoint();
+					$query    = build_list_type_links_query($uri);
+					$result   = run_sparql_query($endpoint, $query, true);
+					$text     = format_list_type_links_result($result);
+
+					$response['result'] = [
+						'toolName' => 'listTypeLinks',
 						'content'  => [
 							[
 								'type' => 'text',

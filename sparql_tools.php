@@ -776,3 +776,130 @@ function format_list_type_properties_result($result, $format = 'text')
             return $out;
     }
 }
+
+//----------------------------------------------------------------------------------------
+// List entity links (neighborhood) for a given entity type
+function build_list_type_links_query($uri)
+{
+    $query = <<<SPARQL
+PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+
+SELECT ?direction ?p ?type (COUNT(*) AS ?count) WHERE
+{
+  {
+    SELECT ?s
+    WHERE
+    {
+      ?s rdf:type <$uri> .
+    }
+    LIMIT 1000
+  }
+
+  {
+    {
+      ?s ?p ?o .
+      FILTER isURI(?o)
+      OPTIONAL { ?o rdf:type ?type }
+      BIND("out" AS ?direction)
+    }
+    UNION
+    {
+      ?o ?p ?s .
+      FILTER isURI(?o)
+      OPTIONAL { ?o rdf:type ?type }
+      BIND("in" AS ?direction)
+    }
+  }
+}
+GROUP BY ?direction ?p ?type
+ORDER BY ?direction ?p
+SPARQL;
+
+    return $query;
+}
+
+//----------------------------------------------------------------------------------------
+function format_list_type_links_result($result, $format = 'text')
+{
+    if (!$result['ok']) {
+        return 'SPARQL error (HTTP ' . $result['status'] . '): ' . $result['error'];
+    }
+
+    $body = $result['body'];
+
+    switch ($format) {
+        case 'json':
+            return $body;
+
+        case 'text':
+        default:
+            $data = json_decode($body, true);
+
+            if (json_last_error() !== JSON_ERROR_NONE || !is_array($data)) {
+                return $body;
+            }
+
+            if (!isset($data['results']['bindings'])) {
+                return json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+            }
+
+            $bindings = $data['results']['bindings'];
+            $outgoing = [];
+            $incoming = [];
+
+            foreach ($bindings as $row) {
+                $link = [];
+                if (isset($row['p']['value'])) {
+                    $link['predicate'] = $row['p']['value'];
+                }
+                if (isset($row['type']['value'])) {
+                    $link['type'] = $row['type']['value'];
+                } else {
+                    $link['type'] = '[no type]';
+                }
+                if (isset($row['count']['value'])) {
+                    $link['count'] = $row['count']['value'];
+                }
+
+                if (!empty($link) && isset($row['direction']['value'])) {
+                    $direction = $row['direction']['value'];
+                    if ($direction === 'out') {
+                        $outgoing[] = $link;
+                    } else if ($direction === 'in') {
+                        $incoming[] = $link;
+                    }
+                }
+            }
+
+            if (empty($outgoing) && empty($incoming)) {
+                return "No links found for this type.";
+            }
+
+            $out = '';
+
+            if (!empty($outgoing)) {
+                $out .= "Outgoing links:\n\n";
+                foreach ($outgoing as $link) {
+                    $predicate = $link['predicate'] ?? '';
+                    $type = $link['type'] ?? '[no type]';
+                    $count = $link['count'] ?? '0';
+                    $out .= "$predicate -> $type ($count occurrences)\n";
+                }
+            }
+
+            if (!empty($incoming)) {
+                if (!empty($outgoing)) {
+                    $out .= "\n";
+                }
+                $out .= "Incoming links:\n\n";
+                foreach ($incoming as $link) {
+                    $predicate = $link['predicate'] ?? '';
+                    $type = $link['type'] ?? '[no type]';
+                    $count = $link['count'] ?? '0';
+                    $out .= "$predicate <- $type ($count occurrences)\n";
+                }
+            }
+
+            return $out;
+    }
+}
