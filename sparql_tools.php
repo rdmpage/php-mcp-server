@@ -782,37 +782,53 @@ function format_list_type_properties_result($result, $format = 'text')
 function build_list_type_links_query($uri)
 {
     $query = <<<SPARQL
-PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+PREFIX rdf:    <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+PREFIX schema: <http://schema.org/>
 
-SELECT ?direction ?p ?type (COUNT(*) AS ?count) WHERE
-{
+SELECT ?direction ?predicate ?nThings ?example (SAMPLE(?t) AS ?exampleType)
+WHERE {
   {
-    SELECT ?s
-    WHERE
-    {
-      ?s rdf:type <$uri> .
-    }
-    LIMIT 1000
-  }
-
-  {
-    {
-      ?s ?p ?o .
-      FILTER isURI(?o)
-      OPTIONAL { ?o rdf:type ?type }
-      BIND("out" AS ?direction)
-    }
-    UNION
-    {
-      ?o ?p ?s .
-      FILTER isURI(?o)
-      OPTIONAL { ?o rdf:type ?type }
-      BIND("in" AS ?direction)
+    # Incoming: ?thing ?predicate ?dataset
+    SELECT ?direction ?predicate ?nThings ?example WHERE {
+      {
+        SELECT ("incoming" AS ?direction)
+               ?predicate
+               (COUNT(DISTINCT ?thing) AS ?nThings)
+               (SAMPLE(?thing) AS ?example)
+        WHERE {
+          ?dataset a <$uri> .
+          ?thing ?predicate ?dataset .
+          FILTER(isIRI(?thing))
+          FILTER(?predicate != rdf:type)
+        }
+        GROUP BY ?predicate
+      }
     }
   }
+  UNION
+  {
+    # Outgoing: ?dataset ?predicate ?thing
+    SELECT ?direction ?predicate ?nThings ?example WHERE {
+      {
+        SELECT ("outgoing" AS ?direction)
+               ?predicate
+               (COUNT(DISTINCT ?thing) AS ?nThings)
+               (SAMPLE(?thing) AS ?example)
+        WHERE {
+          ?dataset a <$uri>.
+          ?dataset ?predicate ?thing .
+          FILTER(isIRI(?thing))
+          FILTER(?predicate != rdf:type)
+        }
+        GROUP BY ?predicate
+      }
+    }
+  }
+
+  OPTIONAL { ?example a ?t }
 }
-GROUP BY ?direction ?p ?type
-ORDER BY ?direction ?p
+GROUP BY ?direction ?predicate ?nThings ?example
+ORDER BY ?direction DESC(?nThings)
 SPARQL;
 
     return $query;
@@ -849,23 +865,26 @@ function format_list_type_links_result($result, $format = 'text')
 
             foreach ($bindings as $row) {
                 $link = [];
-                if (isset($row['p']['value'])) {
-                    $link['predicate'] = $row['p']['value'];
+                if (isset($row['predicate']['value'])) {
+                    $link['predicate'] = $row['predicate']['value'];
                 }
-                if (isset($row['type']['value'])) {
-                    $link['type'] = $row['type']['value'];
+                if (isset($row['nThings']['value'])) {
+                    $link['count'] = $row['nThings']['value'];
+                }
+                if (isset($row['example']['value'])) {
+                    $link['example'] = $row['example']['value'];
+                }
+                if (isset($row['exampleType']['value'])) {
+                    $link['exampleType'] = $row['exampleType']['value'];
                 } else {
-                    $link['type'] = '[no type]';
-                }
-                if (isset($row['count']['value'])) {
-                    $link['count'] = $row['count']['value'];
+                    $link['exampleType'] = '[no type]';
                 }
 
                 if (!empty($link) && isset($row['direction']['value'])) {
                     $direction = $row['direction']['value'];
-                    if ($direction === 'out') {
+                    if ($direction === 'outgoing') {
                         $outgoing[] = $link;
-                    } else if ($direction === 'in') {
+                    } else if ($direction === 'incoming') {
                         $incoming[] = $link;
                     }
                 }
@@ -881,9 +900,11 @@ function format_list_type_links_result($result, $format = 'text')
                 $out .= "Outgoing links:\n\n";
                 foreach ($outgoing as $link) {
                     $predicate = $link['predicate'] ?? '';
-                    $type = $link['type'] ?? '[no type]';
                     $count = $link['count'] ?? '0';
-                    $out .= "$predicate -> $type ($count occurrences)\n";
+                    $example = $link['example'] ?? '';
+                    $exampleType = $link['exampleType'] ?? '[no type]';
+                    $out .= "$predicate ($count distinct entities)\n";
+                    $out .= "  Example: $example (type: $exampleType)\n";
                 }
             }
 
@@ -894,9 +915,11 @@ function format_list_type_links_result($result, $format = 'text')
                 $out .= "Incoming links:\n\n";
                 foreach ($incoming as $link) {
                     $predicate = $link['predicate'] ?? '';
-                    $type = $link['type'] ?? '[no type]';
                     $count = $link['count'] ?? '0';
-                    $out .= "$predicate <- $type ($count occurrences)\n";
+                    $example = $link['example'] ?? '';
+                    $exampleType = $link['exampleType'] ?? '[no type]';
+                    $out .= "$predicate ($count distinct entities)\n";
+                    $out .= "  Example: $example (type: $exampleType)\n";
                 }
             }
 
