@@ -796,8 +796,8 @@ WHERE {
                (COUNT(DISTINCT ?thing) AS ?nThings)
                (SAMPLE(?thing) AS ?example)
         WHERE {
-          ?dataset a <$uri> .
-          ?thing ?predicate ?dataset .
+          ?centre a <$uri> .
+          ?thing ?predicate ?centre .
           FILTER(isIRI(?thing))
           FILTER(?predicate != rdf:type)
         }
@@ -815,8 +815,8 @@ WHERE {
                (COUNT(DISTINCT ?thing) AS ?nThings)
                (SAMPLE(?thing) AS ?example)
         WHERE {
-          ?dataset a <$uri>.
-          ?dataset ?predicate ?thing .
+          ?centre a <$uri>.
+          ?centre ?predicate ?thing .
           FILTER(isIRI(?thing))
           FILTER(?predicate != rdf:type)
         }
