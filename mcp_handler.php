@@ -347,6 +347,11 @@ TEXT;
                                     'type'        => 'string',
                                     'description' => 'URI of the entity type, e.g. "http://schema.org/ScholarlyArticle".',
                                 ],
+                                'format' => [
+                                    'type'        => 'string',
+                                    'description' => 'Output format: "text" (default), "json" (raw SPARQL JSON), or "dot"/"graphviz" (Graphviz DOT format for visualization).',
+                                    'enum'        => ['text', 'json', 'dot', 'graphviz'],
+                                ],
                             ],
                             'required' => ['uri'],
                         ],
@@ -645,10 +650,12 @@ TEXT;
 						break;
 					}
 
+					$format = $args['format'] ?? 'text';
+
 					$endpoint = get_sparql_endpoint();
 					$query    = build_list_type_links_query($uri);
 					$result   = run_sparql_query($endpoint, $query, true);
-					$text     = format_list_type_links_result($result);
+					$text     = format_list_type_links_result($result, $format, $uri);
 
 					$response['result'] = [
 						'toolName' => 'listTypeLinks',
@@ -662,6 +669,7 @@ TEXT;
 							'endpoint' => $endpoint,
 							'status'   => $result['ok'] ? $result['status'] : null,
 							'uri'      => $uri,
+							'format'   => $format,
 						],
 					];
 					break;

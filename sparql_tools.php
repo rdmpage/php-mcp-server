@@ -835,7 +835,7 @@ SPARQL;
 }
 
 //----------------------------------------------------------------------------------------
-function format_list_type_links_result($result, $format = 'text')
+function format_list_type_links_result($result, $format = 'text', $uri = '')
 {
     if (!$result['ok']) {
         return 'SPARQL error (HTTP ' . $result['status'] . '): ' . $result['error'];
@@ -846,6 +846,110 @@ function format_list_type_links_result($result, $format = 'text')
     switch ($format) {
         case 'json':
             return $body;
+
+        case 'dot':
+        case 'graphviz':
+            $data = json_decode($body, true);
+
+            if (json_last_error() !== JSON_ERROR_NONE || !is_array($data)) {
+                return $body;
+            }
+
+            if (!isset($data['results']['bindings'])) {
+                return json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+            }
+
+            $bindings = $data['results']['bindings'];
+
+            // Helper function to create node ID from URI
+            $makeNodeId = function($uri) {
+                if ($uri === '[no type]' || empty($uri)) {
+                    return 'unknown';
+                }
+                // Use the last part of the URI as node ID
+                $parts = explode('/', $uri);
+                $id = end($parts);
+                if (strpos($id, '#') !== false) {
+                    $parts = explode('#', $id);
+                    $id = end($parts);
+                }
+                return preg_replace('/[^a-zA-Z0-9_]/', '_', $id);
+            };
+
+            // Helper function to get label from URI
+            $makeLabel = function($uri) {
+                if ($uri === '[no type]' || empty($uri)) {
+                    return 'Unknown';
+                }
+                $parts = explode('/', $uri);
+                $label = end($parts);
+                if (strpos($label, '#') !== false) {
+                    $parts = explode('#', $label);
+                    $label = end($parts);
+                }
+                return $label;
+            };
+
+            // Helper function to get edge label from predicate URI
+            $makeEdgeLabel = function($uri) {
+                $parts = explode('/', $uri);
+                $label = end($parts);
+                if (strpos($label, '#') !== false) {
+                    $parts = explode('#', $label);
+                    $label = end($parts);
+                }
+                return $label;
+            };
+
+            $dot = "digraph {\n";
+
+            // Define the central node
+            $centralId = $makeNodeId($uri);
+            $centralLabel = $makeLabel($uri);
+            $dot .= "  $centralId [label=\"$centralLabel\"];\n";
+
+            $nodes = [];
+            $edges = [];
+
+            foreach ($bindings as $row) {
+                if (!isset($row['predicate']['value']) || !isset($row['direction']['value'])) {
+                    continue;
+                }
+
+                $predicate = $row['predicate']['value'];
+                $direction = $row['direction']['value'];
+                $exampleType = $row['exampleType']['value'] ?? '[no type]';
+
+                $targetId = $makeNodeId($exampleType);
+                $targetLabel = $makeLabel($exampleType);
+                $edgeLabel = $makeEdgeLabel($predicate);
+
+                // Add node if not already added
+                if (!isset($nodes[$targetId])) {
+                    $nodes[$targetId] = $targetLabel;
+                }
+
+                // Add edge
+                if ($direction === 'outgoing') {
+                    $edges[] = "  $centralId -> $targetId [label=\"$edgeLabel\"];";
+                } else if ($direction === 'incoming') {
+                    $edges[] = "  $targetId -> $centralId [label=\"$edgeLabel\"];";
+                }
+            }
+
+            // Add all nodes
+            foreach ($nodes as $id => $label) {
+                $dot .= "  $id [label=\"$label\"];\n";
+            }
+
+            // Add all edges
+            foreach ($edges as $edge) {
+                $dot .= "$edge\n";
+            }
+
+            $dot .= "}\n";
+
+            return $dot;
 
         case 'text':
         default:
