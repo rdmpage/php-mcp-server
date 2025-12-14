@@ -1204,3 +1204,125 @@ function format_bin_identifications_result($result, $format = 'text')
             return $out;
     }
 }
+
+//----------------------------------------------------------------------------------------
+// List publications that cite sequences in a BIN
+function build_bin_sequence_citations_query($uri)
+{
+    $normalized_uri = normalize_bin_uri($uri);
+
+	$query = <<<SPARQL
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+PREFIX bin: <https://portal.boldsystems.org/bin/>
+PREFIX : <http://schema.org/>
+
+SELECT
+  ?work
+  (SAMPLE(?title) AS ?title)
+  (SAMPLE(?csl) AS ?csl)
+WHERE {
+  VALUES ?bin { <$normalized_uri> }
+  ?barcode :isPartOf ?bin .
+  ?barcode :sameAs ?genbank .
+  ?work :citation ?genbank .
+  ?work :name ?title .
+  OPTIONAL {
+    ?work :description ?csl .
+  }
+}
+GROUP BY ?work
+SPARQL;
+
+    return $query;
+}
+
+//----------------------------------------------------------------------------------------
+function format_bin_sequence_citations_result($result, $format = 'text')
+{
+    if (!$result['ok']) {
+        return 'SPARQL error (HTTP ' . $result['status'] . '): ' . $result['error'];
+    }
+
+    $body = $result['body'];
+
+    switch ($format) {
+        case 'json':
+            return $body;
+
+        case 'apa':
+        case 'bibtex':
+        case 'citeproc':
+            // Use the existing citation formatting function
+            $data = json_decode($body, true);
+
+            if (json_last_error() !== JSON_ERROR_NONE || !is_array($data)) {
+                return $body;
+            }
+
+            if (!isset($data['results']['bindings'])) {
+                return json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+            }
+
+            $bindings = $data['results']['bindings'];
+
+            if (empty($bindings)) {
+                return "No citations found for this BIN.";
+            }
+
+            // Collect all CSL-JSON records
+            $csl = [];
+            foreach ($bindings as $row) {
+                if (isset($row['csl']['value'])) {
+                    $csl[] = json_decode($row['csl']['value']);
+                }
+            }
+
+            if (empty($csl)) {
+                // Fallback to text list if no CSL data available
+                $out = "Publications (CSL formatting not available):\n\n";
+                foreach ($bindings as $row) {
+                    $title = $row['title']['value'] ?? 'Untitled';
+                    $work = $row['work']['value'] ?? '';
+                    $out .= "- $title\n  $work\n\n";
+                }
+                return $out;
+            }
+
+            // Format using citeproc
+            if ($format == 'citeproc') {
+                return json_encode($csl, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+            } else {
+                $style_sheet = StyleSheet::loadStyleSheet($format);
+                $citeProc = new CiteProc($style_sheet);
+                return $citeProc->render($csl, "bibliography");
+            }
+
+        case 'text':
+        default:
+            $data = json_decode($body, true);
+
+            if (json_last_error() !== JSON_ERROR_NONE || !is_array($data)) {
+                return $body;
+            }
+
+            if (!isset($data['results']['bindings'])) {
+                return json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+            }
+
+            $bindings = $data['results']['bindings'];
+
+            if (empty($bindings)) {
+                return "No citations found for this BIN.";
+            }
+
+            $out = "Publications citing sequences in this BIN:\n\n";
+
+            foreach ($bindings as $row) {
+                $title = $row['title']['value'] ?? 'Untitled';
+                $work = $row['work']['value'] ?? '';
+                $out .= "- $title\n  $work\n\n";
+            }
+
+            return $out;
+    }
+}

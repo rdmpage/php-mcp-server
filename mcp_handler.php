@@ -389,6 +389,25 @@ TEXT;
                             'required' => ['uri'],
                         ],
                     ],
+                    [
+                        'name'        => 'binSequenceCitations',
+                        'description' => 'List publications that cite sequences included in a BIN. Returns work titles and URIs by default, or formatted citations in APA, BibTeX, or CiteProc format. Accepts either full URI or short BIN ID (e.g., BOLD:AAD8883).',
+                        'inputSchema' => [
+                            'type'       => 'object',
+                            'properties' => [
+                                'uri' => [
+                                    'type'        => 'string',
+                                    'description' => 'URI or ID of the BIN (e.g., "https://portal.boldsystems.org/bin/BOLD:AAD8883" or "BOLD:AAD8883").',
+                                ],
+                                'format' => [
+                                    'type'        => 'string',
+                                    'description' => 'Output format: "text" (default, simple list), "apa" (APA citations, HTML), "bibtex" (BibTeX citations, HTML), or "citeproc" (CSL-JSON).',
+                                    'enum'        => ['text', 'apa', 'bibtex', 'citeproc'],
+                                ],
+                            ],
+                            'required' => ['uri'],
+                        ],
+                    ],
                 ],
             ];
             break;
@@ -768,6 +787,40 @@ TEXT;
 							'endpoint' => $endpoint,
 							'status'   => $result['ok'] ? $result['status'] : null,
 							'uri'      => $uri,
+						],
+					];
+					break;
+
+				case 'binSequenceCitations':
+					$uri = $args['uri'] ?? '';
+					if (trim($uri) === '') {
+						$response['error'] = [
+							'code'    => -32602,
+							'message' => 'Missing or empty "uri" argument for binSequenceCitations.',
+						];
+						break;
+					}
+
+					$format = $args['format'] ?? 'text';
+
+					$endpoint = get_sparql_endpoint();
+					$query    = build_bin_sequence_citations_query($uri);
+					$result   = run_sparql_query($endpoint, $query, true);
+					$text     = format_bin_sequence_citations_result($result, $format);
+
+					$response['result'] = [
+						'toolName' => 'binSequenceCitations',
+						'content'  => [
+							[
+								'type' => 'text',
+								'text' => $text,
+							],
+						],
+						'meta' => [
+							'endpoint' => $endpoint,
+							'status'   => $result['ok'] ? $result['status'] : null,
+							'uri'      => $uri,
+							'format'   => $format,
 						],
 					];
 					break;
