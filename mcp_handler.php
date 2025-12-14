@@ -375,6 +375,20 @@ TEXT;
                             'required' => ['uri'],
                         ],
                     ],
+                    [
+                        'name'        => 'binIdentifications',
+                        'description' => 'List all taxonomic identifications applied to a BIN (Barcode Index Number), including rank and barcode count for each name. Accepts either full URI or short BIN ID (e.g., BOLD:AAD8883).',
+                        'inputSchema' => [
+                            'type'       => 'object',
+                            'properties' => [
+                                'uri' => [
+                                    'type'        => 'string',
+                                    'description' => 'URI or ID of the BIN (e.g., "https://portal.boldsystems.org/bin/BOLD:AAD8883" or "BOLD:AAD8883").',
+                                ],
+                            ],
+                            'required' => ['uri'],
+                        ],
+                    ],
                 ],
             ];
             break;
@@ -723,6 +737,37 @@ TEXT;
 							'status'   => $result['ok'] ? $result['status'] : null,
 							'uri'      => $uri,
 							'format'   => $format,
+						],
+					];
+					break;
+
+				case 'binIdentifications':
+					$uri = $args['uri'] ?? '';
+					if (trim($uri) === '') {
+						$response['error'] = [
+							'code'    => -32602,
+							'message' => 'Missing or empty "uri" argument for binIdentifications.',
+						];
+						break;
+					}
+
+					$endpoint = get_sparql_endpoint();
+					$query    = build_bin_identifications_query($uri);
+					$result   = run_sparql_query($endpoint, $query, true);
+					$text     = format_bin_identifications_result($result);
+
+					$response['result'] = [
+						'toolName' => 'binIdentifications',
+						'content'  => [
+							[
+								'type' => 'text',
+								'text' => $text,
+							],
+						],
+						'meta' => [
+							'endpoint' => $endpoint,
+							'status'   => $result['ok'] ? $result['status'] : null,
+							'uri'      => $uri,
 						],
 					];
 					break;

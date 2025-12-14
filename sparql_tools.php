@@ -1105,3 +1105,102 @@ function format_work_cite_result($result, $format = 'apa')
             return $out;
     }
 }
+
+//----------------------------------------------------------------------------------------
+// Helper function to normalize BIN URI
+function normalize_bin_uri($uri)
+{
+    // If it's just a BIN ID like "BOLD:AAD8883", expand to full URI
+    if (preg_match('/^BOLD:[A-Z0-9]+$/i', $uri)) {
+        return 'https://portal.boldsystems.org/bin/' . $uri;
+    }
+    // Otherwise assume it's already a full URI
+    return $uri;
+}
+
+//----------------------------------------------------------------------------------------
+// List taxonomic identifications for a BIN
+function build_bin_identifications_query($uri)
+{
+    $normalized_uri = normalize_bin_uri($uri);
+
+	$query = <<<SPARQL
+PREFIX dwc: <http://rs.tdwg.org/dwc/terms/>
+PREFIX bin: <https://portal.boldsystems.org/bin/>
+PREFIX : <http://schema.org/>
+
+SELECT
+  ?name
+  ?rank
+  (COUNT(?name) AS ?nameCount)
+WHERE {
+  ?barcode :isPartOf <$normalized_uri> .
+  ?barcode dwc:taxonRank ?rank .
+  ?barcode dwc:verbatimIdentification ?name .
+}
+GROUP BY ?rank ?name
+SPARQL;
+
+    return $query;
+}
+
+//----------------------------------------------------------------------------------------
+function format_bin_identifications_result($result, $format = 'text')
+{
+    if (!$result['ok']) {
+        return 'SPARQL error (HTTP ' . $result['status'] . '): ' . $result['error'];
+    }
+
+    $body = $result['body'];
+
+    switch ($format) {
+        case 'json':
+            return $body;
+
+        case 'text':
+        default:
+            $data = json_decode($body, true);
+
+            if (json_last_error() !== JSON_ERROR_NONE || !is_array($data)) {
+                return $body;
+            }
+
+            if (!isset($data['results']['bindings'])) {
+                return json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+            }
+
+            $bindings = $data['results']['bindings'];
+
+            if (empty($bindings)) {
+                return "No identifications found for this BIN.";
+            }
+
+            // Group by rank
+            $by_rank = [];
+            foreach ($bindings as $row) {
+                $rank = $row['rank']['value'] ?? 'Unknown';
+                $name = $row['name']['value'] ?? '';
+                $count = $row['nameCount']['value'] ?? '0';
+
+                if (!isset($by_rank[$rank])) {
+                    $by_rank[$rank] = [];
+                }
+                $by_rank[$rank][] = [
+                    'name' => $name,
+                    'count' => $count
+                ];
+            }
+
+            $out = "Taxonomic identifications:\n\n";
+
+            foreach ($by_rank as $rank => $names) {
+                $out .= "$rank:\n";
+                foreach ($names as $item) {
+                    $out .= "  {$item['name']} ({$item['count']} barcodes)\n";
+                }
+                $out .= "\n";
+            }
+
+            return $out;
+    }
+}
