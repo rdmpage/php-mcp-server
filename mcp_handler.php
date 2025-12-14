@@ -408,6 +408,25 @@ TEXT;
                             'required' => ['uri'],
                         ],
                     ],
+                    [
+                        'name'        => 'binDatasetCitations',
+                        'description' => 'List publications that cite BOLD datasets containing barcodes from a BIN. Returns work titles and URIs by default, or formatted citations in APA, BibTeX, or CiteProc format. Accepts either full URI or short BIN ID (e.g., BOLD:AAD8883).',
+                        'inputSchema' => [
+                            'type'       => 'object',
+                            'properties' => [
+                                'uri' => [
+                                    'type'        => 'string',
+                                    'description' => 'URI or ID of the BIN (e.g., "https://portal.boldsystems.org/bin/BOLD:AAD8883" or "BOLD:AAD8883").',
+                                ],
+                                'format' => [
+                                    'type'        => 'string',
+                                    'description' => 'Output format: "text" (default, simple list), "apa" (APA citations, HTML), "bibtex" (BibTeX citations, HTML), or "citeproc" (CSL-JSON).',
+                                    'enum'        => ['text', 'apa', 'bibtex', 'citeproc'],
+                                ],
+                            ],
+                            'required' => ['uri'],
+                        ],
+                    ],
                 ],
             ];
             break;
@@ -810,6 +829,40 @@ TEXT;
 
 					$response['result'] = [
 						'toolName' => 'binSequenceCitations',
+						'content'  => [
+							[
+								'type' => 'text',
+								'text' => $text,
+							],
+						],
+						'meta' => [
+							'endpoint' => $endpoint,
+							'status'   => $result['ok'] ? $result['status'] : null,
+							'uri'      => $uri,
+							'format'   => $format,
+						],
+					];
+					break;
+
+				case 'binDatasetCitations':
+					$uri = $args['uri'] ?? '';
+					if (trim($uri) === '') {
+						$response['error'] = [
+							'code'    => -32602,
+							'message' => 'Missing or empty "uri" argument for binDatasetCitations.',
+						];
+						break;
+					}
+
+					$format = $args['format'] ?? 'text';
+
+					$endpoint = get_sparql_endpoint();
+					$query    = build_bin_dataset_citations_query($uri);
+					$result   = run_sparql_query($endpoint, $query, true);
+					$text     = format_bin_dataset_citations_result($result, $format);
+
+					$response['result'] = [
+						'toolName' => 'binDatasetCitations',
 						'content'  => [
 							[
 								'type' => 'text',
