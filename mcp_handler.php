@@ -356,6 +356,25 @@ TEXT;
                             'required' => ['uri'],
                         ],
                     ],
+                    [
+                        'name'        => 'workCite',
+                        'description' => 'Format a citation for a single work given its URI. Returns formatted citation in APA (HTML), BibTeX (HTML), or CiteProc (JSON) format.',
+                        'inputSchema' => [
+                            'type'       => 'object',
+                            'properties' => [
+                                'uri' => [
+                                    'type'        => 'string',
+                                    'description' => 'URI of the work to cite.',
+                                ],
+                                'format' => [
+                                    'type'        => 'string',
+                                    'description' => 'Citation format: "apa" (default, HTML), "bibtex" (HTML), or "citeproc" (JSON).',
+                                    'enum'        => ['apa', 'bibtex', 'citeproc'],
+                                ],
+                            ],
+                            'required' => ['uri'],
+                        ],
+                    ],
                 ],
             ];
             break;
@@ -659,6 +678,40 @@ TEXT;
 
 					$response['result'] = [
 						'toolName' => 'listTypeLinks',
+						'content'  => [
+							[
+								'type' => 'text',
+								'text' => $text,
+							],
+						],
+						'meta' => [
+							'endpoint' => $endpoint,
+							'status'   => $result['ok'] ? $result['status'] : null,
+							'uri'      => $uri,
+							'format'   => $format,
+						],
+					];
+					break;
+
+				case 'workCite':
+					$uri = $args['uri'] ?? '';
+					if (trim($uri) === '') {
+						$response['error'] = [
+							'code'    => -32602,
+							'message' => 'Missing or empty "uri" argument for workCite.',
+						];
+						break;
+					}
+
+					$format = $args['format'] ?? 'apa';
+
+					$endpoint = get_sparql_endpoint();
+					$query    = build_work_cite_query($uri);
+					$result   = run_sparql_query($endpoint, $query, true);
+					$text     = format_work_cite_result($result, $format);
+
+					$response['result'] = [
+						'toolName' => 'workCite',
 						'content'  => [
 							[
 								'type' => 'text',

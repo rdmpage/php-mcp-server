@@ -8,6 +8,9 @@ ini_set('display_errors', '0');
 ini_set('log_errors', '1');
 ini_set('error_log', 'php://stderr');
 
+// Load composer autoload (includes sparql_tools.php and citeproc-php)
+require_once __DIR__ . '/vendor/autoload.php';
+
 // Load shared MCP request handler
 require_once __DIR__ . '/mcp_handler.php';
 

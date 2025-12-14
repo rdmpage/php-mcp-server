@@ -2,6 +2,9 @@
 // sparql_tools.php
 // SPARQL query building and formatting functions for bibliographic knowledge graph
 
+use Seboettg\CiteProc\StyleSheet;
+use Seboettg\CiteProc\CiteProc;
+
 // ---- CONFIG -----------------------------------------------------------
 
 // Environment----------------------------------------------------------------------------
@@ -1025,6 +1028,78 @@ function format_list_type_links_result($result, $format = 'text', $uri = '')
                     $out .= "$predicate ($count distinct entities)\n";
                     $out .= "  Example: $example (type: $exampleType)\n";
                 }
+            }
+
+            return $out;
+    }
+}
+
+//----------------------------------------------------------------------------------------
+// Format citation for a work
+function build_work_cite_query($uri)
+{
+	$query = <<<SPARQL
+PREFIX : <http://schema.org/>
+PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+SELECT (SAMPLE(?csl) AS ?csl) WHERE {
+  VALUES ?work { <$uri> }
+  VALUES ?type { :CreativeWork :ScholarlyArticle }
+  ?work a ?type  .
+  ?work :description ?csl .
+}
+SPARQL;
+
+    return $query;
+}
+
+//----------------------------------------------------------------------------------------
+function format_work_cite_result($result, $format = 'apa')
+{
+    if (!$result['ok']) {
+        return 'SPARQL error (HTTP ' . $result['status'] . '): ' . $result['error'];
+    }
+
+    $body = $result['body'];
+
+    switch ($format) {
+        case 'json':
+            return $body;
+
+        case 'apa':
+        case 'bibtex':
+        case 'citeproc':
+        default:
+            $data = json_decode($body, true);
+
+            if (json_last_error() !== JSON_ERROR_NONE || !is_array($data)) {
+                return $body;
+            }
+
+            if (!isset($data['results']['bindings'])) {
+                return json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+            }
+
+			// get CSL-JSON
+            $bindings = $data['results']['bindings'];
+            $csl = [];
+
+            foreach ($bindings as $row) {
+                $work = [];
+                if (isset($row['csl']['value'])) {
+                     $csl[] = json_decode($row['csl']['value']);
+                }
+            }
+
+            if ($format == 'citeproc')
+            {
+            	$out = json_encode($csl, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+            }
+            else
+            {
+				$style_sheet = StyleSheet::loadStyleSheet($format);
+				$citeProc = new CiteProc($style_sheet);
+				$out = $citeProc->render($csl, "bibliography");
             }
 
             return $out;

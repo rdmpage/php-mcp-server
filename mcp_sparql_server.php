@@ -15,8 +15,8 @@ fwrite(STDERR, "[php-sparql-mcp] Starting server\n");
 
 // ---- SHARED COMPONENTS ------------------------------------------------
 
-// Load SPARQL query building and formatting functions
-require_once dirname(__FILE__) . '/sparql_tools.php';
+// Load composer autoload (includes sparql_tools.php and citeproc-php)
+require_once dirname(__FILE__) . '/vendor/autoload.php';
 
 // Load MCP request handler (shared with HTTP server)
 require_once dirname(__FILE__) . '/mcp_handler.php';
