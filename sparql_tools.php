@@ -1093,7 +1093,7 @@ function format_work_cite_result($result, $format = 'apa')
 
             if ($format == 'citeproc')
             {
-            	$out = json_encode($csl, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+            	$out = json_encode($csl, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
             }
             else
             {
