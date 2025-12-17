@@ -324,6 +324,14 @@ TEXT;
                         ],
                     ],
                     [
+                        'name'        => 'listLicenses',
+                        'description' => 'List all licenses associated with entities in the knowledge graph, with counts for each license. Results are ordered by count (descending).',
+                        'inputSchema' => [
+                            'type'       => 'object',
+                            'properties' => new stdclass,
+                        ],
+                    ],
+                    [
                         'name'        => 'listTypeProperties',
                         'description' => 'List literal properties (predicates with string values) for a given entity type, sampled from up to 1000 entities.',
                         'inputSchema' => [
@@ -667,6 +675,27 @@ TEXT;
 
 					$response['result'] = [
 						'toolName' => 'listTypes',
+						'content'  => [
+							[
+								'type' => 'text',
+								'text' => $text,
+							],
+						],
+						'meta' => [
+							'endpoint' => $endpoint,
+							'status'   => $result['ok'] ? $result['status'] : null,
+						],
+					];
+					break;
+
+				case 'listLicenses':
+					$endpoint = get_sparql_endpoint();
+					$query    = build_list_licenses_query();
+					$result   = run_sparql_query($endpoint, $query, true);
+					$text     = format_list_licenses_result($result);
+
+					$response['result'] = [
+						'toolName' => 'listLicenses',
 						'content'  => [
 							[
 								'type' => 'text',

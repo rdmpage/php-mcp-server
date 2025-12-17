@@ -1449,3 +1449,67 @@ function format_bin_dataset_citations_result($result, $format = 'text')
             return $out;
     }
 }
+
+//----------------------------------------------------------------------------------------
+// List all licenses in the knowledge graph with counts
+function build_list_licenses_query()
+{
+	$query = <<<SPARQL
+PREFIX : <http://schema.org/>
+PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+SELECT (COUNT(?subject) AS ?count) ?license
+WHERE
+{
+  ?subject :license ?license .
+  FILTER(isIRI(?license) && !isBlank(?license))
+}
+GROUP BY ?license
+ORDER BY DESC(?count)
+SPARQL;
+
+    return $query;
+}
+
+//----------------------------------------------------------------------------------------
+function format_list_licenses_result($result, $format = 'text')
+{
+    if (!$result['ok']) {
+        return 'SPARQL error (HTTP ' . $result['status'] . '): ' . $result['error'];
+    }
+
+    $body = $result['body'];
+
+    switch ($format) {
+        case 'json':
+            return $body;
+
+        case 'text':
+        default:
+            $data = json_decode($body, true);
+
+            if (json_last_error() !== JSON_ERROR_NONE || !is_array($data)) {
+                return $body;
+            }
+
+            if (!isset($data['results']['bindings'])) {
+                return json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+            }
+
+            $bindings = $data['results']['bindings'];
+
+            if (empty($bindings)) {
+                return "No licenses found.";
+            }
+
+            $out = "Licenses in knowledge graph:\n\n";
+
+            foreach ($bindings as $row) {
+                $license = $row['license']['value'] ?? 'Unknown';
+                $count = $row['count']['value'] ?? '0';
+                $out .= "$license ($count entities)\n";
+            }
+
+            return $out;
+    }
+}
